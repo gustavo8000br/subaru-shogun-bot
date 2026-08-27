@@ -16,6 +16,7 @@ const MAX_MEMBERS_PER_SQUAD = Number(process.env.MAX_MEMBERS_PER_SQUAD ?? 15);
 const TEMP_CATEGORY_NAME = process.env.TEMP_CATEGORY_NAME ?? '⚔️ SQUADS TEMPORÁRIAS';
 const EMPTY_SQUAD_TIMEOUT_MS = 5 * 60 * 1000;
 const INACTIVITY_TIMEOUT_MS = 24 * 60 * 60 * 1000;
+const RANK_ORDER = ['iron', 'bronze', 'silver', 'gold', 'platinum', 'diamond', 'ascendant', 'immortal', 'radiant', 'master', 'grandmaster', 'challenger'];
 
 const LOBBY_TO_GAME: Record<string, string> = {
   '🌌・Genshin Impact': 'Genshin Impact',
@@ -127,7 +128,7 @@ export class SquadManager {
   private async findSquadByVoiceChannel(channelId: string) {
     return this.prisma.squad.findFirst({
       where: { voiceChannelId: channelId },
-      include: { members: true },
+      include: { members: true, game: true },
     });
   }
 
@@ -154,7 +155,7 @@ export class SquadManager {
     });
   }
 
-  private async createSquadForGame(memberId: string, guild: Guild, gameName: string) {
+  private async createSquadForGame(memberId: string, guild: Guild, gameName: string, minRank?: string, maxRank?: string) {
     const game = await this.getOrCreateGame(guild, gameName);
     const activeSquads = await this.countActiveSquadsForGame(game.id);
 
@@ -173,6 +174,8 @@ export class SquadManager {
         gameId: game.id,
         name: squadName,
         ownerId: memberId,
+        minRank,
+        maxRank,
         voiceChannelId: voiceChannel.id,
         textChannelId: textChannel.id,
         lastActivityAt: new Date(),
@@ -189,6 +192,12 @@ export class SquadManager {
     await textChannel.send(`🛡️ Squad criada para ${gameName}. <@${memberId}> começou a sessão.`);
 
     return { squad, voiceChannel, textChannel };
+  }
+
+  public async createManualSquad(memberId: string, guild: Guild, gameName: string, minRank?: string, maxRank?: string) {
+    const activeSquad = await this.findActiveSquadForUser(memberId, (await this.getOrCreateGame(guild, gameName)).id);
+    if (activeSquad) throw new Error('Você já está em uma squad ativa deste jogo.');
+    return this.createSquadForGame(memberId, guild, gameName, minRank, maxRank);
   }
 
   private async deleteSquadRecord(guild: Guild, squadId: string) {
@@ -215,6 +224,7 @@ export class SquadManager {
     }
 
     await this.prisma.squadMember.deleteMany({ where: { squadId } });
+    await this.prisma.voiceSession.updateMany({ where: { squadId, active: true }, data: { active: false, endedAt: new Date() } });
     await this.prisma.squad.delete({ where: { id: squadId } });
 
     const timer = this.cleanupTimers.get(squad.voiceChannelId ?? squadId);
@@ -328,6 +338,26 @@ export class SquadManager {
     }
   }
 
+  private rankValue(rank: string | undefined): number {
+    if (!rank) return -1;
+    const normalized = rank.toLowerCase();
+    const index = RANK_ORDER.findIndex((value) => normalized.includes(value));
+    return index;
+  }
+
+  private async validateSquadEntry(userId: string, squad: { id: string; game: { name: string }; minRank: string | null; maxRank: string | null }) {
+    const profile = await this.prisma.userProfile.findUnique({ where: { discordId: userId } });
+    if (!profile) return { allowed: !squad.minRank && !squad.maxRank, message: 'Configure seu elo com /profile set-rank antes de entrar.' };
+    const blacklisted = await this.prisma.squadBlacklist.findUnique({ where: { squadId_userId: { squadId: squad.id, userId: profile.id } } });
+    if (blacklisted) return { allowed: false, message: 'Você está banido desta squad.' };
+    const ranks = (profile.ranks && typeof profile.ranks === 'object' ? profile.ranks : {}) as Record<string, string>;
+    const rank = ranks[squad.game.name.toLowerCase()] ?? ranks[squad.game.name] ?? undefined;
+    const value = this.rankValue(rank);
+    if (squad.minRank && value < this.rankValue(squad.minRank)) return { allowed: false, message: `Seu elo precisa ser pelo menos ${squad.minRank}.` };
+    if (squad.maxRank && value > this.rankValue(squad.maxRank)) return { allowed: false, message: `Seu elo não pode superar ${squad.maxRank}.` };
+    return { allowed: true, message: '' };
+  }
+
   public async handleMessageCreate(message: Message) {
     if (message.author.bot) return;
 
@@ -381,6 +411,13 @@ export class SquadManager {
 
     const squad = await this.findSquadByVoiceChannel(newState.channel.id);
     if (!squad) return;
+
+    const entry = await this.validateSquadEntry(member.id, squad);
+    if (!entry.allowed) {
+      await member.voice.disconnect('Entrada recusada pela squad');
+      await member.send(`⚠️ Entrada recusada: ${entry.message}`).catch(() => undefined);
+      return;
+    }
 
     if (squad.members.length >= MAX_MEMBERS_PER_SQUAD) {
       await member.voice.disconnect();

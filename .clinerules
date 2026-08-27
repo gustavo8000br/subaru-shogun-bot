@@ -1,0 +1,9 @@
+# ShogunBot Documentation Rules
+
+Sempre que um novo comando, funcionalidade ou ajuste for feito no ShogunBot:
+
+1. Atualize o `docs/USER_GUIDE.md` com a instrução do usuário.
+2. Atualize o `README.md` se houver nova variável de ambiente ou dependência de setup.
+3. Adicione uma entrada correspondente no `CHANGELOG.md`.
+
+Mantenha a documentação em português, preserve o padrão Keep a Changelog e use Conventional Commits nas alterações do projeto.
