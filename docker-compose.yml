@@ -8,6 +8,10 @@ services:
       db:
         condition: service_healthy
     restart: unless-stopped
+    dns:
+      - 1.1.1.1
+      - 1.0.0.1
+      - 8.8.8.8
     networks:
       - bot-internal
 
