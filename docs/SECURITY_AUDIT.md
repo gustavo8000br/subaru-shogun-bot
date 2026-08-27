@@ -83,7 +83,7 @@ A aplicação não deve ser considerada pronta para um ambiente hostil sem corri
 ### SEC-007 - PostgreSQL usa credenciais e rede previsíveis
 
 **Severidade:** Média/Alta
-**Evidência:** [docker-compose.yml](../docker-compose.yml) exige `POSTGRES_DB`, `POSTGRES_USER` e `POSTGRES_PASSWORD`, mantém healthcheck e rede interna sem publicar porta. [deploy.sh](../deploy.sh) usa [scripts/bootstrap-compose-env.mjs](../scripts/bootstrap-compose-env.mjs) para derivar apenas variáveis ausentes da `DATABASE_URL`, em arquivo temporário removido ao sair.
+**Evidência:** [docker-compose.yml](../docker-compose.yml) exige `POSTGRES_DB`, `POSTGRES_USER` e `POSTGRES_PASSWORD`, mantém healthcheck e rede interna sem publicar porta. [deploy.sh](../deploy.sh) usa [scripts/bootstrap-compose-env.sh](../scripts/bootstrap-compose-env.sh) para derivar apenas variáveis ausentes da `DATABASE_URL`, em arquivo temporário removido ao sair; o bootstrap usa Bash e não exige Node.js no host.
 **Impacto:** comprometimento de outro serviço Docker ou configuração equivocada pode facilitar acesso ao banco; a senha também é conhecida por padrão.
 
 **Correção recomendada:** manter secrets fortes fora do repositório, rede interna dedicada sem publicação de porta, healthcheck, usuário com menor privilégio e backup cifrado. O bootstrap é compatibilidade operacional para a instalação existente, não substitui rotação da senha legada `postgres`.

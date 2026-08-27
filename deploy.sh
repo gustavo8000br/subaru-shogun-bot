@@ -5,7 +5,7 @@ git pull --ff-only origin main
 
 compose_env="$(mktemp)"
 trap 'rm -f "$compose_env"' EXIT
-node scripts/bootstrap-compose-env.mjs "$compose_env"
+bash scripts/bootstrap-compose-env.sh "$compose_env"
 
 compose=(docker compose --env-file "$compose_env")
 

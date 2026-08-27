@@ -7,6 +7,7 @@ Todas as mudanças relevantes do ShogunBot são documentadas neste arquivo.
 ### Corrigido
 
 - Deploy existente agora prepara temporariamente as variáveis PostgreSQL ausentes a partir da `DATABASE_URL`, sem defaults de senha no Compose e sem alterar o volume atual.
+- Bootstrap do deploy não depende mais de Node.js instalado no host; Docker Compose continua sendo o único runtime necessário na VPS.
 
 O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
