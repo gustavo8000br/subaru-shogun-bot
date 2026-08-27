@@ -2,7 +2,16 @@
 
 Todas as mudanças relevantes do ShogunBot são documentadas neste arquivo.
 
-## Não lançado
+## [2.1.0] - 2026-08-27
+
+### Modificado
+
+- Versão completa estabelecida como `v2.1.0-2105fef-alpha`, com `alpha` como estágio atual.
+- Política normativa de versionamento adicionada em `VERSIONING.md`.
+
+### Decisão de versão
+
+- Bump `minor` escolhido porque esta release consolida funcionalidades compatíveis de Discord/criação dinâmica e melhorias operacionais de deploy; o hash `2105fef` identifica o commit de origem.
 
 ### Corrigido
 

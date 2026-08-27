@@ -76,4 +76,4 @@ Use `/report user:@membro reason:<motivo>` para enviar uma denúncia à staff. O
 
 ## Versão do Bot
 
-Administradores podem usar `/versao` para consultar a versão instalada do ShogunBot. A resposta é privada e só aparece para quem solicitou o comando. A versão desta release é `2.0.0`.
+Administradores podem usar `/versao` para consultar a versão instalada do ShogunBot. A resposta é privada e só aparece para quem solicitou o comando. A versão desta release é `v2.1.0-2105fef-alpha`.

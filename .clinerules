@@ -7,3 +7,5 @@ Sempre que um novo comando, funcionalidade ou ajuste for feito no ShogunBot:
 3. Adicione uma entrada correspondente no `CHANGELOG.md`.
 
 Mantenha a documentação em português, preserve o padrão Keep a Changelog e use Conventional Commits nas alterações do projeto.
+
+Antes de criar qualquer commit, faça o bump de versão seguindo [VERSIONING.md](VERSIONING.md): atualize `VERSION`, `.release-stage`, o núcleo SemVer dos manifests, `src/version.ts` e `CHANGELOG.md`. A versão completa deve usar `vMAJOR.MINOR.PATCH-HHHHHHH-STAGE`.
