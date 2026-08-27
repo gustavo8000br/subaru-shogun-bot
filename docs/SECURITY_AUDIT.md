@@ -21,7 +21,7 @@ A aplicação não deve ser considerada pronta para um ambiente hostil sem corri
 | SEC-004 | Corrigido | Votos legados não foram reconstruídos; elegibilidade depende da migração aplicada. |
 | SEC-005 | Corrigido | Ledger não substitui reconciliação de saldos já inconsistentes. |
 | SEC-006 | Corrigido | Rate limit é por processo; múltiplas réplicas exigem limitador compartilhado. |
-| SEC-007 | Parcial | Compose exige credenciais externas e rede interna; VPS, firewall, backups e permissões do host não foram auditados. |
+| SEC-007 | Parcial | Compose exige credenciais externas e rede interna; `deploy.sh` faz bootstrap temporário das variáveis ausentes a partir da URL interna, sem defaults de senha. VPS, firewall, backups e permissões do host não foram auditados. |
 | SEC-008 | Corrigido no Dockerfile | Filesystem somente leitura e capabilities mínimas ainda dependem da política de deploy. |
 | SEC-009 | Em aberto | `npm audit --omit=dev` ainda reporta 3 high em `deepmerge-ts` transitivo do Prisma; atualização compatível precisa ser avaliada. |
 | SEC-010 | Parcial | Há testes de utilitários e scripts de qualidade; testes de integração Discord/concorrência exigem harness e banco de teste. |
@@ -83,10 +83,10 @@ A aplicação não deve ser considerada pronta para um ambiente hostil sem corri
 ### SEC-007 - PostgreSQL usa credenciais e rede previsíveis
 
 **Severidade:** Média/Alta
-**Evidência:** [docker-compose.yml](../docker-compose.yml) usa `postgres/postgres`, sem healthcheck, isolamento explícito de rede ou secret externo.
+**Evidência:** [docker-compose.yml](../docker-compose.yml) exige `POSTGRES_DB`, `POSTGRES_USER` e `POSTGRES_PASSWORD`, mantém healthcheck e rede interna sem publicar porta. [deploy.sh](../deploy.sh) usa [scripts/bootstrap-compose-env.mjs](../scripts/bootstrap-compose-env.mjs) para derivar apenas variáveis ausentes da `DATABASE_URL`, em arquivo temporário removido ao sair.
 **Impacto:** comprometimento de outro serviço Docker ou configuração equivocada pode facilitar acesso ao banco; a senha também é conhecida por padrão.
 
-**Correção recomendada:** usar secrets fortes fora do repositório, rede interna dedicada sem publicação de porta, healthcheck, usuário com menor privilégio e backup cifrado.
+**Correção recomendada:** manter secrets fortes fora do repositório, rede interna dedicada sem publicação de porta, healthcheck, usuário com menor privilégio e backup cifrado. O bootstrap é compatibilidade operacional para a instalação existente, não substitui rotação da senha legada `postgres`.
 
 ### SEC-008 - Container executa como root e instala dependências de forma não reprodutível
 

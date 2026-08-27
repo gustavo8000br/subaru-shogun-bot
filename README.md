@@ -71,7 +71,9 @@ npm run build
 npm start
 ```
 
-O fluxo automatizado de implantação está em `deploy.sh` e usa `docker compose` para construir a aplicação, aplicar migrações versionadas e registrar os comandos. Em uma instalação existente sem histórico de migrações, faça o baseline do schema uma única vez com revisão operacional antes de usar `migrate deploy`.
+O fluxo automatizado de implantação está em `deploy.sh` e usa `docker compose` para construir a aplicação, aplicar migrações versionadas e registrar os comandos. O script prepara um arquivo temporário, sem exibir valores, para preencher `POSTGRES_DB`, `POSTGRES_USER` e `POSTGRES_PASSWORD` ausentes a partir da `DATABASE_URL` interna já configurada. O arquivo é removido ao terminar; não coloque segredos no repositório.
+
+Em uma instalação existente sem essas três variáveis no `.env`, confirme operacionalmente que `DATABASE_URL` continua usando o usuário legado, o banco `subaru_shogun`, a porta `5432` e o host interno `db`; preserve a senha existente sem registrá-la. Em seguida, execute `./deploy.sh`. O bootstrap não remove volumes, não executa `down` e não altera credenciais de um volume PostgreSQL já inicializado. Se a URL não estiver disponível ou não usar o host interno `db`, interrompa o deploy e corrija o ambiente manualmente sem registrar a URL em logs. Em uma instalação sem histórico de migrações, faça o baseline do schema uma única vez com revisão operacional antes de usar `migrate deploy`.
 
 As credenciais Twitch não são armazenadas no banco: `TWITCH_CLIENT_ID` e `TWITCH_CLIENT_SECRET` devem permanecer somente no ambiente/runtime. A configuração `/twitch config credentials` salva apenas o Client ID.
 
