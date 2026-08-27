@@ -6,8 +6,14 @@ Todas as mudanças relevantes do ShogunBot são documentadas neste arquivo.
 
 ### Corrigido
 
+- Criação dinâmica agora reconhece `➕ · Criar Squad` e `SQUADS_CREATE_VOICE_CHANNEL_ID`, localiza `⚔️ │ SQUADS TEMPORÁRIAS` por nome ou `SQUADS_CATEGORY_ID`, cria os canais com os nomes definidos, move o criador e remove a squad ao sair o último usuário.
+- Estrutura da guild SubaruShogun organizada sem apagar conteúdo: categorias e canais equivalentes foram renomeados/movidos, o AFK nativo foi configurado com timeout de 900 segundos e os lobbies passaram a usar os nomes oficiais.
 - Deploy existente agora prepara temporariamente as variáveis PostgreSQL ausentes a partir da `DATABASE_URL`, sem defaults de senha no Compose e sem alterar o volume atual.
 - Bootstrap do deploy não depende mais de Node.js instalado no host; Docker Compose continua sendo o único runtime necessário na VPS.
+
+### Configuração
+
+- IDs estratégicos documentados em `SQUADS_CATEGORY_ID`, `SQUADS_CREATE_VOICE_CHANNEL_ID`, `SQUADS_CREATE_TEXT_CHANNEL_ID`, `LIVE_AGORA_CHANNEL_ID` e `CHAT_LIVE_CHANNEL_ID`; nenhum secret é incluído.
 
 O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
 

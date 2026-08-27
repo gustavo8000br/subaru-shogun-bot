@@ -13,23 +13,38 @@ import { PrismaClient } from '@prisma/client';
 
 const MAX_SQUADS_PER_GAME = Number(process.env.MAX_SQUADS_PER_GAME ?? 10);
 const MAX_MEMBERS_PER_SQUAD = Number(process.env.MAX_MEMBERS_PER_SQUAD ?? 15);
-const TEMP_CATEGORY_NAME = process.env.TEMP_CATEGORY_NAME ?? '⚔️ SQUADS TEMPORÁRIAS';
+const TEMP_CATEGORY_NAME = process.env.TEMP_CATEGORY_NAME ?? '⚔️ │ SQUADS TEMPORÁRIAS';
+const SQUADS_CATEGORY_ID = process.env.SQUADS_CATEGORY_ID;
+const SQUAD_CREATION_CHANNEL_NAME = '➕ · Criar Squad';
+const DYNAMIC_SQUAD_GAME_NAME = 'Squad Dinâmica';
 const EMPTY_SQUAD_TIMEOUT_MS = 5 * 60 * 1000;
 const INACTIVITY_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 const RANK_ORDER = ['iron', 'bronze', 'silver', 'gold', 'platinum', 'diamond', 'ascendant', 'immortal', 'radiant', 'master', 'grandmaster', 'challenger'];
 
 const LOBBY_TO_GAME: Record<string, string> = {
-  '🌌・Genshin Impact': 'Genshin Impact',
-  '⚙️・Arknights: Endfield': 'Arknights: Endfield',
-  '🔥・Diablo IV': 'Diablo IV',
-  '💀・Diablo III': 'Diablo III',
-  '⛏️・Minecraft': 'Minecraft',
-  '🪓・Terraria': 'Terraria',
+  '🌌 · Genshin Impact': 'Genshin Impact',
+  '⚙️ · Arknights: Endfield': 'Arknights: Endfield',
+  '🔥 · Diablo IV': 'Diablo IV',
+  '💀 · Diablo III': 'Diablo III',
+  '⛏️ · Minecraft': 'Minecraft',
+  '🪓 · Terraria': 'Terraria',
 };
+
+export function isSquadCreationChannel(channelName: string | null, channelId: string | null, configuredChannelId = process.env.SQUADS_CREATE_VOICE_CHANNEL_ID): boolean {
+  return channelName === SQUAD_CREATION_CHANNEL_NAME || Boolean(configuredChannelId && channelId === configuredChannelId);
+}
+
+export function getDynamicSquadChannelNames(userName: string): { voiceName: string; textName: string } {
+  return {
+    voiceName: `🔊 · Squad de ${userName}`,
+    textName: `💬 · squad-de-${userName}`,
+  };
+}
 
 export class SquadManager {
   private started = false;
   private readonly cleanupTimers = new Map<string, NodeJS.Timeout>();
+  private readonly dynamicCreationsInFlight = new Set<string>();
 
   constructor(
     private readonly client: Client,
@@ -68,6 +83,9 @@ export class SquadManager {
   }
 
   private async ensureTemporaryCategory(guild: Guild): Promise<GuildBasedChannel> {
+    const configuredCategory = SQUADS_CATEGORY_ID ? guild.channels.cache.get(SQUADS_CATEGORY_ID) : undefined;
+    if (configuredCategory?.type === ChannelType.GuildCategory) return configuredCategory;
+
     const existingCategory = guild.channels.cache.find(
       (channel) => channel.type === ChannelType.GuildCategory && channel.name === TEMP_CATEGORY_NAME,
     );
@@ -95,15 +113,9 @@ export class SquadManager {
     });
   }
 
-  private async createTextChannel(guild: Guild, categoryId: string, squadName: string): Promise<TextChannel> {
-    const safeName = squadName
-      .toLowerCase()
-      .replace(/[^a-z0-9\-\s]/g, '')
-      .replace(/\s+/g, '-')
-      .slice(0, 80);
-
+  private async createTextChannel(guild: Guild, categoryId: string, channelName: string): Promise<TextChannel> {
     return guild.channels.create({
-      name: `squad-${safeName}`,
+      name: channelName,
       type: ChannelType.GuildText,
       parent: categoryId,
       topic: 'Squad temporária para a sessão criada automaticamente.',
@@ -156,7 +168,7 @@ export class SquadManager {
     });
   }
 
-  private async createSquadForGame(memberId: string, guild: Guild, gameName: string, minRank?: string, maxRank?: string) {
+  private async createSquadForGame(memberId: string, guild: Guild, gameName: string, minRank?: string, maxRank?: string, channelNames?: { voiceName: string; textName: string }) {
     const game = await this.getOrCreateGame(guild, gameName);
     const activeSquads = await this.countActiveSquadsForGame(game.id);
 
@@ -165,10 +177,10 @@ export class SquadManager {
     }
 
     const category = await this.ensureTemporaryCategory(guild);
-    const squadName = `${gameName} • Squad ${activeSquads + 1}`;
+    const squadName = channelNames?.voiceName ?? `${gameName} • Squad ${activeSquads + 1}`;
 
     const voiceChannel = await this.createVoiceChannel(guild, category.id, squadName);
-    const textChannel = await this.createTextChannel(guild, category.id, squadName);
+    const textChannel = await this.createTextChannel(guild, category.id, channelNames?.textName ?? `squad-${squadName}`);
 
     const squad = await this.prisma.squad.create({
       data: {
@@ -191,7 +203,7 @@ export class SquadManager {
       },
     });
 
-    await textChannel.send({ content: `🛡️ Squad criada para ${gameName}. <@${memberId}> começou a sessão.`, allowedMentions: { parse: [] } });
+    await textChannel.send({ content: `🛡️ Squad criada para ${gameName}. Voz: <#${voiceChannel.id}>. Chat: <#${textChannel.id}>. <@${memberId}> começou a sessão.`, allowedMentions: { parse: [] } });
 
     return { squad, voiceChannel, textChannel };
   }
@@ -200,6 +212,14 @@ export class SquadManager {
     const activeSquad = await this.findActiveSquadForUser(memberId, (await this.getOrCreateGame(guild, gameName)).id);
     if (activeSquad) throw new Error('Você já está em uma squad ativa deste jogo.');
     return this.createSquadForGame(memberId, guild, gameName, minRank, maxRank);
+  }
+
+  private async createDynamicSquad(memberId: string, guild: Guild, userName: string) {
+    const game = await this.getOrCreateGame(guild, DYNAMIC_SQUAD_GAME_NAME);
+    const activeSquad = await this.findActiveSquadForUser(memberId, game.id);
+    if (activeSquad) return null;
+
+    return this.createSquadForGame(memberId, guild, DYNAMIC_SQUAD_GAME_NAME, undefined, undefined, getDynamicSquadChannelNames(userName));
   }
 
   private async deleteSquadRecord(guild: Guild, squadId: string) {
@@ -386,12 +406,28 @@ export class SquadManager {
 
         const currentVoiceChannel = guild.channels.cache.get(oldState.channelId);
         if (currentVoiceChannel && currentVoiceChannel.type === ChannelType.GuildVoice && currentVoiceChannel.members.size === 0) {
-          this.scheduleEmptySquadCleanup(guild, oldSquad.id, oldState.channelId);
+          if (oldSquad.game.name === DYNAMIC_SQUAD_GAME_NAME) {
+            await this.deleteSquadRecord(guild, oldSquad.id);
+          } else {
+            this.scheduleEmptySquadCleanup(guild, oldSquad.id, oldState.channelId);
+          }
         }
       }
     }
 
     if (!newState.channel) return;
+
+    if (isSquadCreationChannel(newState.channel.name, newState.channel.id)) {
+      if (this.dynamicCreationsInFlight.has(member.id)) return;
+      this.dynamicCreationsInFlight.add(member.id);
+      try {
+        const created = await this.createDynamicSquad(member.id, guild, member.displayName || member.user.username);
+        if (created) await member.voice.setChannel(created.voiceChannel);
+      } finally {
+        this.dynamicCreationsInFlight.delete(member.id);
+      }
+      return;
+    }
 
     if (this.isLobbyChannel(newState.channel.name)) {
       const gameName = this.getGameNameFromLobby(newState.channel.name);

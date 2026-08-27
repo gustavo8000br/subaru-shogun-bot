@@ -18,6 +18,20 @@ A documentação de uso para membros e staff está em [docs/USER_GUIDE.md](docs/
 
 A aplicação inicializa os serviços em `src/bot.ts`. O gerenciamento do ciclo de vida das squads fica em `src/squadManager.ts`; comandos administrativos e de usuário ficam em `src/commands/adminCommands.ts`; integrações ficam em `src/services/`.
 
+## Estrutura Discord
+
+Na guild SubaruShogun (`1229598456872570900`), a organização operacional é:
+
+- `📌 │ INFORMAÇÕES`: `👋 · boas-vindas`, `📜 · regras`, `📢 · avisos`, `🎭 · cargos`, `🔗 · links-uteis`;
+- `💬 │ COMUNIDADE`: `💬 · chat-geral`, `📸 · prints-e-clipes`, `🤖 · comandos`, `🎮 · games`, `🎵 · musica`;
+- `📺 │ TWITCH`: `🔴 · live-agora`, `🟣 · chat-live`, `🎬 · clips`;
+- `⚔️ │ SQUADS TEMPORÁRIAS`: `🛠️ · criar-squad`, `➕ · Criar Squad`;
+- `🎮 │ LOBBIES (Voz Pública)`: `🔊 · Resenha Geral`, `🎲 · Outros Jogos`, `🌌 · Genshin Impact`, `⚙️ · Arknights: Endfield`, `🔥 · Diablo IV`, `💀 · Diablo III`, `⛏️ · Minecraft`, `🪓 · Terraria`, `💤 · AFK (Sem áudio)`;
+- `🛠️ │ SUPORTE`: `🎟️ · tickets`, `❓ · faq`;
+- `👑 │ STAFF (Privado)`: `💬 · staff-chat`, `📋 · logs`, `🚨 · moderacao`.
+
+O servidor usa `💤 · AFK (Sem áudio)` como canal AFK nativo com timeout de 900 segundos. Os IDs estratégicos ficam no ambiente local: `SQUADS_CATEGORY_ID`, `SQUADS_CREATE_VOICE_CHANNEL_ID`, `SQUADS_CREATE_TEXT_CHANNEL_ID`, `LIVE_AGORA_CHANNEL_ID` e `CHAT_LIVE_CHANNEL_ID`. Não versione `.env` nem credenciais.
+
 ## Instalação local
 
 ### Pré-requisitos
@@ -37,7 +51,7 @@ npm ci
 copy .env.example .env
 ```
 
-No macOS/Linux, use `cp .env.example .env` no lugar de `copy`. Preencha no `.env` as credenciais Discord, os IDs dos canais e a `DATABASE_URL`. As variáveis de economia, Twitch e auditoria estão documentadas em [.env.example](.env.example).
+No macOS/Linux, use `cp .env.example .env` no lugar de `copy`. Preencha no `.env` as credenciais Discord, os IDs dos canais e a `DATABASE_URL`. Para criação dinâmica, configure `SQUADS_CREATE_VOICE_CHANNEL_ID` ou use o nome exato `➕ · Criar Squad`. A categoria é localizada por `SQUADS_CATEGORY_ID` ou pelo nome `⚔️ │ SQUADS TEMPORÁRIAS`; o bot cria `🔊 · Squad de [NomeUsuario]` e `💬 · squad-de-[NomeUsuario]`, move o membro e apaga ambos quando ficam vazios. As variáveis de economia, Twitch e auditoria estão documentadas em [.env.example](.env.example).
 
 Suba o PostgreSQL pelo Docker:
 

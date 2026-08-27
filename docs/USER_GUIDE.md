@@ -2,20 +2,25 @@
 
 Guia para membros e staff do servidor SubaruShogun.
 
+## Canais do servidor
+
+Use `📌 │ INFORMAÇÕES` para comunicados e cargos, `💬 │ COMUNIDADE` para conversa e mídia, `📺 │ TWITCH` para live/chat/clips, `🛠️ │ SUPORTE` para tickets e FAQ e `👑 │ STAFF (Privado)` para a equipe. As squads temporárias ficam em `⚔️ │ SQUADS TEMPORÁRIAS`; os lobbies públicos ficam em `🎮 │ LOBBIES (Voz Pública)`. O canal `💤 · AFK (Sem áudio)` usa o AFK nativo do Discord após 900 segundos.
+
 ## Gerenciamento de Squads e LFG
 
 ### Criar uma sala
 
 Há duas formas de iniciar uma squad:
 
-- Entre em um canal de lobby de jogo configurado. O ShogunBot cria uma sala temporária e move você para ela.
+- Entre em `🌌 · Genshin Impact`, `⚙️ · Arknights: Endfield`, `🔥 · Diablo IV`, `💀 · Diablo III`, `⛏️ · Minecraft` ou `🪓 · Terraria`. O ShogunBot cria uma sala temporária e move você para ela.
+- Entre no canal de voz `➕ · Criar Squad` ou no canal configurado em `SQUADS_CREATE_VOICE_CHANNEL_ID`. O bot localiza a categoria por `SQUADS_CATEGORY_ID` ou pelo nome `⚔️ │ SQUADS TEMPORÁRIAS`, cria uma voz `🔊 · Squad de [seu nome]` e um texto `💬 · squad-de-[seu nome]`, e move você para a voz criada.
 - Use `/squad create` e informe `game`. Opcionalmente, defina `min_rank` e `max_rank` para restringir o elo dos participantes.
 
 Para consultar e administrar a squad atual, use `/squad panel`. O painel permite bloquear a sala, remover membros, renomear a squad e encerrá-la.
 
 Ao entrar em uma squad com restrição de elo, o bot verifica o elo cadastrado no seu perfil. Usuários sem o elo adequado são removidos da sala. O líder também pode usar `/squad ban user:@membro` para impedir a reentrada de uma pessoa naquela sala.
 
-As squads temporárias são removidas quando ficam vazias por tempo suficiente ou quando expiram por inatividade.
+As squads temporárias são removidas quando ficam vazias por tempo suficiente ou quando expiram por inatividade. Uma squad dinâmica é removida imediatamente quando o último usuário sai da voz, com os registros e sessões associados limpos.
 
 ## Integração Twitch
 
@@ -26,6 +31,8 @@ A configuração exige permissão de administrador:
 3. Use `/twitch config setup` e selecione o canal Discord para espelhar o chat e o canal para avisos de live.
 
 Depois da configuração, o bot reconecta os serviços e publica avisos no canal definido. Para limpar o histórico do chat espelhado, a staff deve apagar as mensagens no canal Discord configurado, respeitando as permissões e a política de retenção do servidor.
+
+Os canais operacionais são `🔴 · live-agora` para avisos, `🟣 · chat-live` para o chat espelhado e `🎬 · clips` para clipes. Seus IDs podem ser registrados em `LIVE_AGORA_CHANNEL_ID` e `CHAT_LIVE_CHANNEL_ID`; mantenha `TWITCH_CLIENT_SECRET` somente no ambiente/runtime.
 
 ## Economia e Loja
 
