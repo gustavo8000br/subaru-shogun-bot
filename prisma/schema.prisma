@@ -1,0 +1,44 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Game {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  squads    Squad[]
+}
+
+model Squad {
+  id             String        @id @default(cuid())
+  gameId         String
+  game           Game          @relation(fields: [gameId], references: [id])
+  name           String
+  ownerId        String
+  voiceChannelId String?       @unique
+  textChannelId  String?       @unique
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  lastActivityAt DateTime      @default(now())
+  members        SquadMember[]
+
+  @@index([gameId])
+  @@index([lastActivityAt])
+}
+
+model SquadMember {
+  id        String   @id @default(cuid())
+  squadId   String
+  squad     Squad    @relation(fields: [squadId], references: [id])
+  userId    String
+  joinedAt  DateTime @default(now())
+
+  @@unique([squadId, userId])
+  @@index([userId])
+}
