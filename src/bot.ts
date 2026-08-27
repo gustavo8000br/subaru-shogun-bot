@@ -1,6 +1,6 @@
 import { Client, Events, GatewayIntentBits, Interaction, REST, Routes, SlashCommandBuilder, Collection, ButtonInteraction, StringSelectMenuInteraction } from 'discord.js';
 import { PrismaClient } from '@prisma/client';
-import { buildAdminCommands, handleAdminCommand, handleSquadButtonInteraction, handleMemberSelection, handleSquadPanel, handleTwitchCommand, handleEconomyCommand, handleProfileOrTopCommand, handleReportCommand } from './commands/adminCommands.js';
+import { buildAdminCommands, handleAdminCommand, handleSquadButtonInteraction, handleMemberSelection, handleSquadPanel, handleTwitchCommand, handleEconomyCommand, handleProfileOrTopCommand, handleReportCommand, handleVersionCommand } from './commands/adminCommands.js';
 import { SquadManager } from './squadManager.js';
 import { TwitchChatService } from './services/twitchChat.js';
 import { TwitchMonitorService } from './services/twitchMonitor.js';
@@ -54,6 +54,10 @@ export class SubaruShogunBot {
       if (interaction.isCommand()) {
         if (['balance', 'shop', 'buy'].includes(interaction.commandName)) {
           await handleEconomyCommand(interaction, this.prisma);
+          return;
+        }
+        if (interaction.commandName === 'versao') {
+          await handleVersionCommand(interaction);
           return;
         }
         if (['profile', 'top'].includes(interaction.commandName)) {

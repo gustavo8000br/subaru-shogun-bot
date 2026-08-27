@@ -5,6 +5,7 @@ import { TwitchChatService } from '../services/twitchChat.js';
 import { TwitchMonitorService } from '../services/twitchMonitor.js';
 import { SHOP_ITEMS } from '../services/voiceEconomy.js';
 import { SquadManager } from '../squadManager.js';
+import { BOT_VERSION } from '../version.js';
 
 export function buildAdminCommands() {
   return [
@@ -35,6 +36,7 @@ export function buildAdminCommands() {
       .toJSON(),
 
     new SlashCommandBuilder().setName('balance').setDescription('Exibe seu saldo de Shogun Coins.').toJSON(),
+    new SlashCommandBuilder().setName('versao').setDescription('Exibe a versão atual do bot.').setDefaultMemberPermissions(PermissionFlagsBits.Administrator).toJSON(),
     new SlashCommandBuilder().setName('shop').setDescription('Exibe a loja de recompensas.').toJSON(),
     new SlashCommandBuilder()
       .setName('buy').setDescription('Resgata um item da loja.')
@@ -162,6 +164,15 @@ export async function handleEconomyCommand(interaction: CommandInteraction, pris
     await interaction.member.roles.add(role).catch(() => undefined);
   }
   await interaction.reply({ content: `Resgate concluído: **${item.name}**.`, ephemeral: true });
+}
+
+export async function handleVersionCommand(interaction: CommandInteraction) {
+  if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+    await interaction.reply({ content: 'Apenas administradores podem consultar a versão do bot.', ephemeral: true });
+    return;
+  }
+
+  await interaction.reply({ content: `Versão atual do ShogunBot: **${BOT_VERSION}**`, ephemeral: true });
 }
 
 export async function handleProfileOrTopCommand(interaction: CommandInteraction, prisma: PrismaClient) {

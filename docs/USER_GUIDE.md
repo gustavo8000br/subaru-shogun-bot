@@ -66,3 +66,7 @@ Os rankings são apresentados em formato de embed e podem ser consultados por qu
 ## Denúncias
 
 Use `/report user:@membro reason:<motivo>` para enviar uma denúncia à staff. O registro é salvo na auditoria do bot e encaminhado ao canal de staff configurado.
+
+## Versão do Bot
+
+Administradores podem usar `/versao` para consultar a versão instalada do ShogunBot. A resposta é privada e só aparece para quem solicitou o comando.

@@ -4,6 +4,20 @@ Todas as mudanças relevantes do ShogunBot são documentadas neste arquivo.
 
 O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [1.2.0] - 2026-08-27
+
+### Adicionado
+
+- Comando `/versao` para administradores consultarem a versão atual em resposta privada.
+
+### Modificado
+
+- Versão do projeto atualizada para `1.2.0` em `package.json`, `package-lock.json` e no runtime do bot.
+
+### Corrigido
+
+- Restringida a consulta de versão a membros com permissão de administrador.
+
 ## [1.0.0] - 2026-08-27
 
 ### Adicionado

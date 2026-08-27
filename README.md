@@ -2,6 +2,8 @@
 
 Bot Discord do servidor SubaruShogun, responsável por squads temporárias, LFG com filtros de elo, economia por participação em voz, reputação, eventos agendados e integração com Twitch.
 
+Versão atual: `1.2.0`.
+
 A documentação de uso para membros e staff está em [docs/USER_GUIDE.md](docs/USER_GUIDE.md).
 
 ## Arquitetura e tecnologias
