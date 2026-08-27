@@ -2,7 +2,25 @@
 
 Todas as mudanças relevantes do ShogunBot são documentadas neste arquivo.
 
+## Não lançado
+
+Nenhuma alteração registrada.
+
 O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
+
+## [2.0.0] - 2026-08-27
+
+### Segurança
+
+- Adicionada proteção do contexto Docker contra arquivos de ambiente, chaves e logs.
+- Componentes Discord passaram a exigir autorização, guild correta e expiração; votos e compras são idempotentes/transacionais.
+- Segredos Twitch passaram a ser fornecidos somente pelo ambiente/runtime.
+- Relay Twitch, denúncias, lembretes e anúncios neutralizam menções e limitam conteúdo externo.
+- Deploy passou a aplicar migrações Prisma versionadas e o Compose usa rede interna e healthcheck.
+
+### Modificado
+
+- Versão do projeto atualizada para `2.0.0` em `package.json`, `package-lock.json` e no runtime do bot.
 
 ## [1.2.0] - 2026-08-27
 

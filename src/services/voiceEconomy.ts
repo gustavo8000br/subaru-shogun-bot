@@ -24,7 +24,7 @@ export class VoiceEconomyService {
 
     const channelId = newState.channelId;
     if (!channelId) return;
-    const squad = await this.prisma.squad.findFirst({ where: { voiceChannelId: channelId } });
+    const squad = await this.prisma.squad.findFirst({ where: { voiceChannelId: channelId, guildId: newState.guild.id } });
     if (!squad || newState.selfMute || newState.serverMute || newState.selfDeaf || newState.serverDeaf) return;
 
     const profile = await this.prisma.userProfile.upsert({
@@ -42,7 +42,7 @@ export class VoiceEconomyService {
     const profile = await this.prisma.userProfile.findUnique({ where: { discordId } });
     if (!profile) return;
     await this.prisma.voiceSession.updateMany({
-      where: { userId: profile.id, active: true, squad: { voiceChannelId: channelId } },
+      where: { userId: profile.id, active: true, squad: { voiceChannelId: channelId, guildId: this.client.guilds.cache.find((guild) => guild.channels.cache.has(channelId))?.id } },
       data: { active: false, endedAt: new Date() },
     });
   }

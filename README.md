@@ -2,7 +2,7 @@
 
 Bot Discord do servidor SubaruShogun, responsável por squads temporárias, LFG com filtros de elo, economia por participação em voz, reputação, eventos agendados e integração com Twitch.
 
-Versão atual: `1.2.0`.
+Versão atual: `2.0.0`.
 
 A documentação de uso para membros e staff está em [docs/USER_GUIDE.md](docs/USER_GUIDE.md).
 
@@ -33,7 +33,7 @@ A aplicação inicializa os serviços em `src/bot.ts`. O gerenciamento do ciclo 
 ```bash
 git clone <url-do-repositorio>
 cd subaru-shogun-bot
-npm install
+npm ci
 copy .env.example .env
 ```
 
@@ -49,7 +49,7 @@ Gere o cliente Prisma e aplique o schema:
 
 ```bash
 npm run db:generate
-npm run db:push
+npm run db:migrate:deploy
 ```
 
 Registre os comandos slash na guild configurada:
@@ -71,7 +71,9 @@ npm run build
 npm start
 ```
 
-O fluxo automatizado de implantação está em `deploy.sh` e usa `docker compose` para construir a aplicação, atualizar o schema e registrar os comandos.
+O fluxo automatizado de implantação está em `deploy.sh` e usa `docker compose` para construir a aplicação, aplicar migrações versionadas e registrar os comandos. Em uma instalação existente sem histórico de migrações, faça o baseline do schema uma única vez com revisão operacional antes de usar `migrate deploy`.
+
+As credenciais Twitch não são armazenadas no banco: `TWITCH_CLIENT_ID` e `TWITCH_CLIENT_SECRET` devem permanecer somente no ambiente/runtime. A configuração `/twitch config credentials` salva apenas o Client ID.
 
 ## Como contribuir
 
@@ -82,7 +84,7 @@ O fluxo automatizado de implantação está em `deploy.sh` e usa `docker compose
 5. Abra um Pull Request descrevendo o problema, a solução e como validar.
 6. Aguarde revisão antes do merge; não faça commit diretamente em `main`.
 
-Mudanças que alterem schema devem incluir a atualização do Prisma e explicar o impacto de dados no Pull Request. Segredos e arquivos `.env` nunca devem ser commitados.
+Mudanças que alterem schema devem incluir a atualização do Prisma e explicar o impacto de dados no Pull Request. Segredos e arquivos `.env` nunca devem ser commitados. A versão publicada deve ser atualizada em `package.json`, `package-lock.json` e `src/version.ts`.
 
 ## Padrões de commit
 

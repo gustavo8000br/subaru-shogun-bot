@@ -55,12 +55,13 @@ export class SquadManager {
   }
 
   private async getOrCreateGame(guild: Guild, gameName: string) {
-    const existing = await this.prisma.game.findUnique({ where: { name: gameName } });
+    const existing = await this.prisma.game.findUnique({ where: { guildId_name: { guildId: guild.id, name: gameName } } });
 
     if (existing) return existing;
 
     return this.prisma.game.create({
       data: {
+        guildId: guild.id,
         name: gameName,
       },
     });
@@ -125,9 +126,9 @@ export class SquadManager {
     });
   }
 
-  private async findSquadByVoiceChannel(channelId: string) {
+  private async findSquadByVoiceChannel(channelId: string, guildId: string) {
     return this.prisma.squad.findFirst({
-      where: { voiceChannelId: channelId },
+      where: { voiceChannelId: channelId, guildId },
       include: { members: true, game: true },
     });
   }
@@ -171,6 +172,7 @@ export class SquadManager {
 
     const squad = await this.prisma.squad.create({
       data: {
+        guildId: guild.id,
         gameId: game.id,
         name: squadName,
         ownerId: memberId,
@@ -189,7 +191,7 @@ export class SquadManager {
       },
     });
 
-    await textChannel.send(`🛡️ Squad criada para ${gameName}. <@${memberId}> começou a sessão.`);
+    await textChannel.send({ content: `🛡️ Squad criada para ${gameName}. <@${memberId}> começou a sessão.`, allowedMentions: { parse: [] } });
 
     return { squad, voiceChannel, textChannel };
   }
@@ -362,7 +364,7 @@ export class SquadManager {
     if (message.author.bot) return;
 
     const squad = await this.prisma.squad.findFirst({
-      where: { textChannelId: message.channel.id },
+      where: { textChannelId: message.channel.id, guildId: message.guildId ?? undefined },
     });
 
     if (!squad) return;
@@ -377,7 +379,7 @@ export class SquadManager {
     const guild = newState.guild;
 
     if (oldState.channelId && oldState.channelId !== newState.channelId) {
-      const oldSquad = await this.findSquadByVoiceChannel(oldState.channelId);
+      const oldSquad = await this.findSquadByVoiceChannel(oldState.channelId, guild.id);
 
       if (oldSquad) {
         await this.updateSquadActivity(oldSquad.id);
@@ -409,7 +411,7 @@ export class SquadManager {
       return;
     }
 
-    const squad = await this.findSquadByVoiceChannel(newState.channel.id);
+    const squad = await this.findSquadByVoiceChannel(newState.channel.id, guild.id);
     if (!squad) return;
 
     const entry = await this.validateSquadEntry(member.id, squad);

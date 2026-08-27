@@ -1,10 +1,12 @@
 import tmi from 'tmi.js';
 import { Client, PermissionFlagsBits, TextChannel } from 'discord.js';
 import { ResolvedTwitchConfig } from './twitchConfig.js';
+import { normalizeExternalText, SlidingWindowRateLimiter } from '../security.js';
 
 export class TwitchChatService {
   private readonly client: Client;
   private readonly connections = new Map<string, tmi.Client>();
+  private readonly relayRateLimiter = new SlidingWindowRateLimiter(20, 60_000);
 
   constructor(client: Client) {
     this.client = client;
@@ -22,10 +24,14 @@ export class TwitchChatService {
     const connection = new tmi.Client({ channels: [config.channelName] });
     connection.on('message', async (_channel, tags, message, self) => {
       if (self || !message.trim()) return;
+      if (!this.relayRateLimiter.allow(config.guildId)) return;
       try {
         const target = await this.client.channels.fetch(config.chatChannelId);
         if (target instanceof TextChannel) {
-          await target.send(`**[Twitch - ${tags['display-name'] ?? tags.username ?? 'Usuário'}]**: ${message}`);
+          const author = normalizeExternalText(tags['display-name'] ?? tags.username ?? 'Usuário', 64);
+          const content = normalizeExternalText(message);
+          if (!content) return;
+          await target.send({ content: `**[Twitch - ${author}]**: ${content}`, allowedMentions: { parse: [] } });
         }
       } catch (error) {
         console.error(`Erro ao espelhar Twitch (${config.guildId}):`, error);

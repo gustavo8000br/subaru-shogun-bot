@@ -9,10 +9,13 @@ datasource db {
 
 model Game {
   id        String   @id @default(cuid())
-  name      String   @unique
+  guildId   String   @default("legacy")
+  name      String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   squads    Squad[]
+
+  @@unique([guildId, name])
 }
 
 model UserProfile {
@@ -64,7 +67,6 @@ model TwitchConfig {
   id             String   @id @default(cuid())
   guildId        String   @unique
   clientId       String?
-  clientSecret   String?
   channelName    String?
   chatChannelId  String?
   announceChannelId String?
@@ -74,6 +76,7 @@ model TwitchConfig {
 
 model Squad {
   id             String        @id @default(cuid())
+  guildId        String        @default("legacy")
   gameId         String
   game           Game          @relation(fields: [gameId], references: [id])
   name           String
@@ -90,6 +93,7 @@ model Squad {
   voiceSessions  VoiceSession[]
 
   @@index([gameId])
+  @@index([guildId])
   @@index([lastActivityAt])
 }
 
@@ -156,4 +160,39 @@ model AuditLog {
   createdAt DateTime @default(now())
 
   @@index([guildId, createdAt])
+}
+
+model ReputationParticipant {
+  id        String   @id @default(cuid())
+  squadId   String
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@unique([squadId, userId])
+  @@index([squadId, expiresAt])
+}
+
+model ReputationVote {
+  id        String   @id @default(cuid())
+  squadId   String
+  voterId   String
+  targetId  String
+  type      String
+  createdAt DateTime @default(now())
+
+  @@unique([squadId, voterId, targetId, type])
+  @@index([squadId, voterId])
+}
+
+model PurchaseLedger {
+  id            String   @id @default(cuid())
+  requestId     String
+  userId        String
+  itemId        String
+  price         Int
+  createdAt     DateTime @default(now())
+
+  @@unique([userId, requestId])
+  @@index([userId, createdAt])
 }

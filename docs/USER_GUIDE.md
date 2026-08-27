@@ -21,7 +21,7 @@ As squads temporárias são removidas quando ficam vazias por tempo suficiente o
 
 A configuração exige permissão de administrador:
 
-1. Use `/twitch config credentials` com o `client_id` e `client_secret` da Twitch.
+1. Mantenha `TWITCH_CLIENT_ID` e `TWITCH_CLIENT_SECRET` no ambiente/runtime e use `/twitch config credentials` somente com o `client_id`. O segredo nunca é salvo no banco.
 2. Use `/twitch config channel` com o nome do canal Twitch.
 3. Use `/twitch config setup` e selecione o canal Discord para espelhar o chat e o canal para avisos de live.
 
@@ -69,4 +69,4 @@ Use `/report user:@membro reason:<motivo>` para enviar uma denúncia à staff. O
 
 ## Versão do Bot
 
-Administradores podem usar `/versao` para consultar a versão instalada do ShogunBot. A resposta é privada e só aparece para quem solicitou o comando.
+Administradores podem usar `/versao` para consultar a versão instalada do ShogunBot. A resposta é privada e só aparece para quem solicitou o comando. A versão desta release é `2.0.0`.

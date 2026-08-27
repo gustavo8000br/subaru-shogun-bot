@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { Client, EmbedBuilder, PermissionFlagsBits, TextChannel } from 'discord.js';
 import { ResolvedTwitchConfig } from './twitchConfig.js';
+import { normalizeExternalText } from '../security.js';
 
 type TwitchStream = { title: string; game_name: string; thumbnail_url: string };
 type MonitorState = { config: ResolvedTwitchConfig; interval: NodeJS.Timeout; wasLive: boolean; token?: string; tokenExpiresAt: number };
@@ -57,10 +58,10 @@ export class TwitchMonitorService {
     if (!(channel instanceof TextChannel)) return;
     const me = channel.guild.members.me;
     if (!me?.permissionsIn(channel).has(PermissionFlagsBits.SendMessages)) return;
-    const embed = new EmbedBuilder().setColor(0x6441a5).setTitle(`🔴 ${config.channelName} está ao vivo!`)
-      .addFields({ name: 'Título', value: stream.title || 'Sem título' }, { name: 'Jogo', value: stream.game_name || 'Não informado' })
+    const embed = new EmbedBuilder().setColor(0x6441a5).setTitle(`🔴 ${normalizeExternalText(config.channelName, 100)} está ao vivo!`)
+      .addFields({ name: 'Título', value: normalizeExternalText(stream.title || 'Sem título', 1_024) }, { name: 'Jogo', value: normalizeExternalText(stream.game_name || 'Não informado', 1_024) })
       .setURL(`https://twitch.tv/${config.channelName}`).setThumbnail(stream.thumbnail_url.replace('{width}', '320').replace('{height}', '180')).setTimestamp();
-    await channel.send({ content: '@everyone', embeds: [embed], allowedMentions: { parse: ['everyone'] } });
+    await channel.send({ embeds: [embed], allowedMentions: { parse: [] } });
   }
 
   private async purgeChatHistory(config: ResolvedTwitchConfig): Promise<void> {

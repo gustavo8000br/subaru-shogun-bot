@@ -116,7 +116,7 @@ export class SubaruShogunBot {
     const upcoming = await this.prisma.scheduledSquad.findMany({ where: { status: 'scheduled', scheduledTime: { lte: new Date(now + 15 * 60 * 1000), gte: new Date(now) } }, include: { attendees: true } });
     for (const scheduled of upcoming) {
       const channel = scheduled.channelId ? this.client.channels.cache.get(scheduled.channelId) : undefined;
-      if (channel?.isTextBased() && 'send' in channel) await channel.send(`Lembrete: **${scheduled.title}** começa em 15 minutos. ${scheduled.attendees.map(attendee => `<@${attendee.userId}>`).join(' ')}`);
+      if (channel?.isTextBased() && 'send' in channel) await channel.send({ content: `Lembrete: **${scheduled.title}** começa em 15 minutos. ${scheduled.attendees.map(attendee => `<@${attendee.userId}>`).join(' ')}`, allowedMentions: { parse: [] } });
       await this.prisma.scheduledSquad.update({ where: { id: scheduled.id }, data: { status: 'notified' } });
     }
   }

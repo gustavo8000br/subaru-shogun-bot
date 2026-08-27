@@ -6,6 +6,10 @@ import { TwitchMonitorService } from '../services/twitchMonitor.js';
 import { SHOP_ITEMS } from '../services/voiceEconomy.js';
 import { SquadManager } from '../squadManager.js';
 import { BOT_VERSION } from '../version.js';
+import { normalizeExternalText, SlidingWindowRateLimiter } from '../security.js';
+
+const reportRateLimiter = new SlidingWindowRateLimiter(3, 10 * 60 * 1000);
+const PANEL_TTL_MS = 15 * 60 * 1000;
 
 export function buildAdminCommands() {
   return [
@@ -62,8 +66,7 @@ export function buildAdminCommands() {
         .addSubcommand(subcommand => subcommand
           .setName('credentials')
           .setDescription('Define as credenciais da Twitch.')
-          .addStringOption(option => option.setName('client_id').setDescription('Client ID da Twitch').setRequired(true))
-          .addStringOption(option => option.setName('client_secret').setDescription('Client Secret da Twitch').setRequired(true)))
+          .addStringOption(option => option.setName('client_id').setDescription('Client ID da Twitch').setRequired(true)))
         .addSubcommand(subcommand => subcommand
           .setName('channel')
           .setDescription('Define o nome do canal Twitch.')
@@ -101,7 +104,6 @@ export async function handleTwitchCommand(interaction: CommandInteraction, prism
   const data: Record<string, string> = {};
   if (subcommand === 'credentials') {
     data.clientId = options.getString('client_id', true);
-    data.clientSecret = options.getString('client_secret', true);
   } else if (subcommand === 'channel') {
     data.channelName = options.getString('name', true).toLowerCase();
   } else if (subcommand === 'setup') {
@@ -151,14 +153,25 @@ export async function handleEconomyCommand(interaction: CommandInteraction, pris
     await interaction.reply({ content: 'Item inválido.', ephemeral: true });
     return;
   }
-  if (profile.shogunCoins < item.price) {
-    await interaction.reply({ content: `Saldo insuficiente. Você precisa de ${item.price} coins.`, ephemeral: true });
-    return;
+  try {
+    await prisma.$transaction(async (transaction) => {
+      const debit = await transaction.userProfile.updateMany({ where: { id: profile.id, shogunCoins: { gte: item.price } }, data: { shogunCoins: { decrement: item.price } } });
+      if (debit.count !== 1) throw new Error('INSUFFICIENT_FUNDS');
+      await transaction.userInventory.upsert({ where: { userId_itemId: { userId: profile.id, itemId } }, create: { userId: profile.id, itemId }, update: { quantity: { increment: 1 } } });
+      await transaction.purchaseLedger.create({ data: { requestId: interaction.id, userId: profile.id, itemId, price: item.price } });
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === 'INSUFFICIENT_FUNDS') {
+      await interaction.reply({ content: `Saldo insuficiente. Você precisa de ${item.price} coins.`, ephemeral: true });
+      return;
+    }
+    const existingPurchase = await prisma.purchaseLedger.findUnique({ where: { userId_requestId: { userId: profile.id, requestId: interaction.id } } });
+    if (existingPurchase) {
+      await interaction.reply({ content: 'Esta compra já foi processada.', ephemeral: true });
+      return;
+    }
+    throw error;
   }
-  await prisma.$transaction([
-    prisma.userProfile.update({ where: { id: profile.id }, data: { shogunCoins: { decrement: item.price } } }),
-    prisma.userInventory.upsert({ where: { userId_itemId: { userId: profile.id, itemId } }, create: { userId: profile.id, itemId }, update: { quantity: { increment: 1 } } }),
-  ]);
   if (item.type === 'role' && interaction.guild && interaction.member instanceof GuildMember) {
     const role = interaction.guild.roles.cache.get(process.env.COSMETIC_ROLE_ID ?? '') ?? await interaction.guild.roles.create({ name: 'Shogun Cosmético', color: 0xf1c40f, reason: 'Recompensa da loja' });
     await interaction.member.roles.add(role).catch(() => undefined);
@@ -201,21 +214,31 @@ async function writeAudit(prisma: PrismaClient, guildId: string, actorId: string
 
 export async function handleReportCommand(interaction: CommandInteraction, prisma: PrismaClient) {
   if (!interaction.guild) return;
+  if (!reportRateLimiter.allow(`${interaction.guild.id}:${interaction.user.id}`)) {
+    await interaction.reply({ content: 'Limite de denúncias atingido. Tente novamente mais tarde.', ephemeral: true });
+    return;
+  }
   const target = (interaction as any).options.getUser('user', true);
-  const reason = (interaction as any).options.getString('reason', true);
+  const reason = normalizeExternalText((interaction as any).options.getString('reason', true));
+  if (!reason) {
+    await interaction.reply({ content: 'Informe um motivo válido.', ephemeral: true });
+    return;
+  }
   await writeAudit(prisma, interaction.guild.id, interaction.user.id, 'member_report', target.id, { reason });
   const channel = interaction.guild.channels.cache.get(process.env.STAFF_AUDIT_CHANNEL_ID ?? '');
-  if (channel?.isTextBased() && 'send' in channel) await channel.send(`Denúncia: <@${interaction.user.id}> denunciou <@${target.id}>. Motivo: ${reason}`);
+  if (channel?.isTextBased() && 'send' in channel) await channel.send({ content: `Denúncia: <@${interaction.user.id}> denunciou <@${target.id}>. Motivo: ${reason}`, allowedMentions: { parse: [] } });
   await interaction.reply({ content: 'Denúncia enviada à staff.', ephemeral: true });
 }
 
-async function requestSquadReputation(guild: any, memberIds: string[]) {
+async function requestSquadReputation(guild: any, prisma: PrismaClient, squadId: string, memberIds: string[]) {
   const options = memberIds.slice(0, 25).map((userId) => ({ label: userId, value: userId }));
   if (!options.length) return;
-  const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(new StringSelectMenuBuilder().setCustomId('reputation-vote').setPlaceholder('Escolha um colega para dar GG/Honor').addOptions(options));
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  await prisma.reputationParticipant.createMany({ data: memberIds.map((userId) => ({ squadId, userId, expiresAt })), skipDuplicates: true });
+  const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(new StringSelectMenuBuilder().setCustomId(`reputation-vote:${squadId}:${expiresAt.getTime()}`).setPlaceholder('Escolha um colega para dar GG/Honor').addOptions(options));
   await Promise.all(memberIds.map(async (userId) => {
     const member = guild.members.cache.get(userId);
-    if (member) await member.send({ content: 'A squad terminou. Reconheça um colega com GG/Honor:', components: [row] }).catch(() => undefined);
+    if (member) await member.send({ content: 'A squad terminou. Reconheça um colega com GG/Honor:', components: [row], allowedMentions: { parse: [] } }).catch(() => undefined);
   }));
 }
 
@@ -232,6 +255,7 @@ export async function handleAdminCommand(interaction: CommandInteraction, prisma
     }
 
     const squads = await prisma.squad.findMany({
+      where: { game: { guildId: interaction.guild.id } },
       include: { members: true, game: true },
       orderBy: { createdAt: 'desc' },
     });
@@ -276,7 +300,7 @@ export async function handleAdminCommand(interaction: CommandInteraction, prisma
     }
 
     const squad = await prisma.squad.findUnique({
-      where: { id: squadId },
+      where: { id: squadId, game: { guildId: interaction.guild.id } },
       include: { members: true },
     });
 
@@ -287,7 +311,7 @@ export async function handleAdminCommand(interaction: CommandInteraction, prisma
 
     const voiceChannel = interaction.guild.channels.cache.get(squad.voiceChannelId ?? '');
     const textChannel = interaction.guild.channels.cache.get(squad.textChannelId ?? '');
-    await requestSquadReputation(interaction.guild, squad.members.map((member) => member.userId));
+    await requestSquadReputation(interaction.guild, prisma, squad.id, squad.members.map((member) => member.userId));
 
     if (voiceChannel && 'delete' in voiceChannel) await voiceChannel.delete('Encerramento administrativo da squad.');
     if (textChannel && 'delete' in textChannel) await textChannel.delete('Encerramento administrativo da squad.');
@@ -316,7 +340,7 @@ export async function handleSquadPanel(interaction: CommandInteraction, prisma: 
     if (!interaction.guild) return;
     const target = (interaction as any).options.getUser('user', true);
     const member = interaction.member as GuildMember;
-    const squad = member.voice.channelId ? await prisma.squad.findFirst({ where: { voiceChannelId: member.voice.channelId }, include: { members: true } }) : null;
+    const squad = member.voice.channelId ? await prisma.squad.findFirst({ where: { voiceChannelId: member.voice.channelId, game: { guildId: interaction.guild.id } }, include: { members: true } }) : null;
     if (!squad || squad.ownerId !== interaction.user.id) {
       await interaction.reply({ content: 'Apenas o líder na própria squad pode banir membros.', ephemeral: true });
       return;
@@ -343,7 +367,7 @@ export async function handleSquadPanel(interaction: CommandInteraction, prisma: 
     const scheduled = await prisma.scheduledSquad.create({ data: { title: options.getString('title', true), game: options.getString('game', true), scheduledTime, creatorId: profile.id, minElo: options.getString('min_rank'), maxElo: options.getString('max_rank'), channelId: channel.id } });
     const event = await interaction.guild.scheduledEvents.create({ name: scheduled.title, scheduledStartTime: scheduledTime, scheduledEndTime: new Date(scheduledTime.getTime() + 2 * 60 * 60 * 1000), privacyLevel: GuildScheduledEventPrivacyLevel.GuildOnly, entityType: GuildScheduledEventEntityType.External, entityMetadata: { location: channel.name }, description: `${scheduled.game} | Confirme presença no botão abaixo.` });
     await prisma.scheduledSquad.update({ where: { id: scheduled.id }, data: { discordEventId: event.id } });
-    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setCustomId(`scheduled-confirm:${scheduled.id}`).setLabel('Confirmar Presença').setStyle(ButtonStyle.Success));
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setCustomId(`scheduled-confirm:${scheduled.id}:${Date.now()}`).setLabel('Confirmar Presença').setStyle(ButtonStyle.Success));
     await interaction.reply({ content: `Evento criado para <t:${Math.floor(scheduledTime.getTime() / 1000)}:F>.`, components: [row] });
     return;
   }
@@ -361,7 +385,7 @@ export async function handleSquadPanel(interaction: CommandInteraction, prisma: 
   }
 
   const squad = await prisma.squad.findFirst({
-    where: { voiceChannelId: currentVoiceChannel.id },
+    where: { voiceChannelId: currentVoiceChannel.id, game: { guildId: interaction.guild.id } },
     include: { members: true },
   });
 
@@ -374,14 +398,14 @@ export async function handleSquadPanel(interaction: CommandInteraction, prisma: 
   const hasStaff = interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) || interaction.memberPermissions?.has(PermissionFlagsBits.ManageChannels);
 
   const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder().setCustomId(`squad-lock:${squad.id}`).setLabel(squad.voiceChannelId ? 'Bloquear Sala' : 'Desbloquear Sala').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(`squad-rename:${squad.id}`).setLabel('Renomear Squad').setStyle(ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId(`squad-end:${squad.id}`).setLabel('Encerrar Squad').setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId(`squad-lock:${squad.id}:${Date.now()}`).setLabel(squad.voiceChannelId ? 'Bloquear Sala' : 'Desbloquear Sala').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`squad-rename:${squad.id}:${Date.now()}`).setLabel('Renomear Squad').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(`squad-end:${squad.id}:${Date.now()}`).setLabel('Encerrar Squad').setStyle(ButtonStyle.Danger),
   );
 
   const row2 = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
     new StringSelectMenuBuilder()
-      .setCustomId(`squad-member-actions:${squad.id}`)
+      .setCustomId(`squad-member-actions:${squad.id}:${Date.now()}`)
       .setPlaceholder('Expulsar membro da squad')
       .addOptions(
         squad.members.map((memberRecord) => ({
@@ -400,8 +424,11 @@ export async function handleSquadPanel(interaction: CommandInteraction, prisma: 
 }
 
 export async function handleSquadButtonInteraction(interaction: any, prisma: PrismaClient) {
-  const [action, squadId] = interaction.customId.split(':');
-  if (!squadId) return;
+  const [action, squadId, createdAt] = interaction.customId.split(':');
+  if (!squadId || !createdAt || Number.isNaN(Number(createdAt)) || (action === 'scheduled-confirm' ? Date.now() - Number(createdAt) > 7 * 24 * 60 * 60 * 1000 : Date.now() - Number(createdAt) > PANEL_TTL_MS)) {
+    await interaction.reply({ content: 'Este painel expirou. Abra um novo painel da squad.', ephemeral: true }).catch(() => undefined);
+    return;
+  }
 
   if (action === 'scheduled-confirm') {
     const profile = await getProfile(prisma, interaction.user.id);
@@ -414,14 +441,23 @@ export async function handleSquadButtonInteraction(interaction: any, prisma: Pri
 
   const squad = await prisma.squad.findUnique({ where: { id: squadId }, include: { members: true } });
   if (!squad) return;
+  const guild = interaction.guild;
+  const isStaff = interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) || interaction.memberPermissions?.has(PermissionFlagsBits.ManageChannels);
+  const isOwner = squad.ownerId === interaction.user.id;
+  const isCurrentMember = squad.members.some((member) => member.userId === interaction.user.id);
+  if (!guild || (!isOwner && !isStaff) || (!isCurrentMember && !isStaff)) {
+    await interaction.reply({ content: 'Você não tem autorização para esta ação.', ephemeral: true });
+    return;
+  }
+  const voiceChannel = squad.voiceChannelId ? guild.channels.cache.get(squad.voiceChannelId) : undefined;
+  const textChannel = squad.textChannelId ? guild.channels.cache.get(squad.textChannelId) : undefined;
+  if (voiceChannel?.guild?.id !== guild.id || textChannel?.guild?.id !== guild.id) {
+    await interaction.reply({ content: 'A squad não pertence a este servidor.', ephemeral: true });
+    return;
+  }
 
   if (action === 'squad-end') {
-    const guild = interaction.guild;
-    if (!guild) return;
-
-    const voiceChannel = guild.channels.cache.get(squad.voiceChannelId ?? '');
-    const textChannel = guild.channels.cache.get(squad.textChannelId ?? '');
-    await requestSquadReputation(guild, squad.members.map((member) => member.userId));
+    await requestSquadReputation(guild, prisma, squad.id, squad.members.map((member) => member.userId));
 
     if (voiceChannel && 'delete' in voiceChannel) await voiceChannel.delete('Squad encerrada pelo painel.');
     if (textChannel && 'delete' in textChannel) await textChannel.delete('Squad encerrada pelo painel.');
@@ -434,8 +470,6 @@ export async function handleSquadButtonInteraction(interaction: any, prisma: Pri
   }
 
   if (action === 'squad-lock') {
-    const guild = interaction.guild;
-    if (!guild) return;
     const channel = guild.channels.cache.get(squad.voiceChannelId ?? '');
     if (!channel || channel.type !== 2) return;
 
@@ -451,15 +485,34 @@ export async function handleSquadButtonInteraction(interaction: any, prisma: Pri
 }
 
 export async function handleMemberSelection(interaction: any, prisma: PrismaClient) {
-  const [action, squadId] = interaction.customId.split(':');
-  if (interaction.customId === 'reputation-vote') {
+  const [action, squadId, expiresAt] = interaction.customId.split(':');
+  if (action === 'reputation-vote') {
     const targetId = interaction.values?.[0];
-    if (!targetId || targetId === interaction.user.id) {
+    if (!squadId || !expiresAt || Number.isNaN(Number(expiresAt)) || Date.now() > Number(expiresAt) || !targetId || targetId === interaction.user.id) {
       await interaction.reply({ content: 'Escolha outro membro.', ephemeral: true });
       return;
     }
-    const target = await getProfile(prisma, targetId);
-    await prisma.userProfile.update({ where: { id: target.id }, data: { reputationScore: { increment: 1 }, ggCount: { increment: 1 } } });
+    const [voter, target] = await Promise.all([
+      prisma.reputationParticipant.findFirst({ where: { squadId, userId: interaction.user.id, expiresAt: { gt: new Date() } } }),
+      prisma.reputationParticipant.findFirst({ where: { squadId, userId: targetId, expiresAt: { gt: new Date() } } }),
+    ]);
+    if (!voter || !target) {
+      await interaction.reply({ content: 'Você só pode reconhecer participantes da sessão válida.', ephemeral: true });
+      return;
+    }
+    const targetProfile = await getProfile(prisma, targetId);
+    try {
+      await prisma.$transaction(async (transaction) => {
+        await transaction.reputationVote.create({ data: { squadId, voterId: interaction.user.id, targetId, type: 'gg' } });
+        await transaction.userProfile.update({ where: { id: targetProfile.id }, data: { reputationScore: { increment: 1 }, ggCount: { increment: 1 } } });
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('Unique constraint')) {
+        await interaction.reply({ content: 'Você já reconheceu este membro nesta sessão.', ephemeral: true });
+        return;
+      }
+      throw error;
+    }
     await interaction.reply({ content: `GG/Honor enviado para <@${targetId}>.`, ephemeral: true });
     return;
   }
@@ -470,9 +523,20 @@ export async function handleMemberSelection(interaction: any, prisma: PrismaClie
 
   const guild = interaction.guild;
   const squad = await prisma.squad.findUnique({ where: { id: squadId } });
-  if (!guild || !squad) return;
+  if (!guild || !squad || !expiresAt || Number.isNaN(Number(expiresAt)) || Date.now() - Number(expiresAt) > PANEL_TTL_MS) {
+    await interaction.reply({ content: 'Este painel expirou ou não está disponível neste servidor.', ephemeral: true }).catch(() => undefined);
+    return;
+  }
 
   const member = guild.members.cache.get(memberId);
+  const isStaff = interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) || interaction.memberPermissions?.has(PermissionFlagsBits.ManageChannels);
+  const targetEntry = await prisma.squadMember.findUnique({ where: { squadId_userId: { squadId, userId: memberId } } });
+  const isAuthorized = squad.ownerId === interaction.user.id || isStaff;
+  const squadChannel = guild.channels.cache.get(squad.voiceChannelId ?? '');
+  if (!isAuthorized || !targetEntry || squadChannel?.guild?.id !== guild.id) {
+    await interaction.reply({ content: 'Você não tem autorização ou o alvo não pertence mais à squad.', ephemeral: true });
+    return;
+  }
   if (member) {
     await member.voice.disconnect();
   }
