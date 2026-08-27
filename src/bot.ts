@@ -1,9 +1,10 @@
 import { Client, Events, GatewayIntentBits, Interaction, REST, Routes, SlashCommandBuilder, Collection, ButtonInteraction, StringSelectMenuInteraction } from 'discord.js';
 import { PrismaClient } from '@prisma/client';
-import { buildAdminCommands, handleAdminCommand, handleSquadButtonInteraction, handleMemberSelection, handleSquadPanel } from './commands/adminCommands.js';
+import { buildAdminCommands, handleAdminCommand, handleSquadButtonInteraction, handleMemberSelection, handleSquadPanel, handleTwitchCommand } from './commands/adminCommands.js';
 import { SquadManager } from './squadManager.js';
 import { TwitchChatService } from './services/twitchChat.js';
 import { TwitchMonitorService } from './services/twitchMonitor.js';
+import { resolveTwitchConfig } from './services/twitchConfig.js';
 
 export class SubaruShogunBot {
   private client: Client;
@@ -35,8 +36,13 @@ export class SubaruShogunBot {
       console.log(`Bot online: ${this.client.user?.tag}`);
       await this.squadManager.start();
       await this.registerCommands();
-      await this.twitchChat.start();
-      await this.twitchMonitor.start();
+      for (const guild of this.client.guilds.cache.values()) {
+        const config = await resolveTwitchConfig(this.prisma, guild.id);
+        if (config) {
+          await this.twitchChat.reconfigure(config);
+          await this.twitchMonitor.reconfigure(config);
+        }
+      }
     });
 
     this.client.on(Events.InteractionCreate, async (interaction) => {
@@ -48,6 +54,11 @@ export class SubaruShogunBot {
 
         if (interaction.commandName === 'squad') {
           await handleSquadPanel(interaction, this.prisma);
+          return;
+        }
+
+        if (interaction.commandName === 'twitch') {
+          await handleTwitchCommand(interaction, this.prisma, this.twitchChat, this.twitchMonitor);
           return;
         }
       }

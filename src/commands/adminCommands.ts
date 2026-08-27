@@ -1,5 +1,8 @@
-import { CommandInteraction, GuildMember, PermissionFlagsBits, SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuInteraction } from 'discord.js';
+import { CommandInteraction, GuildMember, PermissionFlagsBits, SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuInteraction, ChannelType } from 'discord.js';
 import { PrismaClient } from '@prisma/client';
+import { resolveTwitchConfig } from '../services/twitchConfig.js';
+import { TwitchChatService } from '../services/twitchChat.js';
+import { TwitchMonitorService } from '../services/twitchMonitor.js';
 
 export function buildAdminCommands() {
   return [
@@ -30,6 +33,29 @@ export function buildAdminCommands() {
       .toJSON(),
 
     new SlashCommandBuilder()
+      .setName('twitch')
+      .setDescription('Configure a integração Twitch deste servidor.')
+      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+      .addSubcommandGroup(group => group
+        .setName('config')
+        .setDescription('Atualiza as configurações Twitch.')
+        .addSubcommand(subcommand => subcommand
+          .setName('credentials')
+          .setDescription('Define as credenciais da Twitch.')
+          .addStringOption(option => option.setName('client_id').setDescription('Client ID da Twitch').setRequired(true))
+          .addStringOption(option => option.setName('client_secret').setDescription('Client Secret da Twitch').setRequired(true)))
+        .addSubcommand(subcommand => subcommand
+          .setName('channel')
+          .setDescription('Define o nome do canal Twitch.')
+          .addStringOption(option => option.setName('name').setDescription('Nome do canal Twitch').setRequired(true)))
+        .addSubcommand(subcommand => subcommand
+          .setName('setup')
+          .setDescription('Define os canais Discord da integração.')
+          .addChannelOption(option => option.setName('chat_channel').setDescription('Canal para espelhar o chat').addChannelTypes(ChannelType.GuildText).setRequired(true))
+          .addChannelOption(option => option.setName('announce_channel').setDescription('Canal para anunciar lives').addChannelTypes(ChannelType.GuildText).setRequired(true))))
+      .toJSON(),
+
+    new SlashCommandBuilder()
       .setName('squad')
       .setDescription('Gerencie a sua squad atual.')
       .addSubcommand(subcommand =>
@@ -39,6 +65,46 @@ export function buildAdminCommands() {
       )
       .toJSON(),
   ];
+}
+
+export async function handleTwitchCommand(interaction: CommandInteraction, prisma: PrismaClient, twitchChat: TwitchChatService, twitchMonitor: TwitchMonitorService) {
+  if (!interaction.guild || !interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+    await interaction.reply({ content: 'Apenas administradores podem configurar a Twitch.', ephemeral: true });
+    return;
+  }
+
+  const options = (interaction as any).options;
+  const subcommand = options.getSubcommand();
+  const data: Record<string, string> = {};
+  if (subcommand === 'credentials') {
+    data.clientId = options.getString('client_id', true);
+    data.clientSecret = options.getString('client_secret', true);
+  } else if (subcommand === 'channel') {
+    data.channelName = options.getString('name', true).toLowerCase();
+  } else if (subcommand === 'setup') {
+    data.chatChannelId = options.getChannel('chat_channel', true).id;
+    data.announceChannelId = options.getChannel('announce_channel', true).id;
+  }
+
+  await prisma.twitchConfig.upsert({
+    where: { guildId: interaction.guild.id },
+    create: { guildId: interaction.guild.id, ...data },
+    update: data,
+  });
+  const config = await resolveTwitchConfig(prisma, interaction.guild.id);
+  if (!config) {
+    await interaction.reply({ content: 'Configuração salva. Complete os demais campos para ativar a integração.', ephemeral: true });
+    return;
+  }
+
+  try {
+    await twitchChat.reconfigure(config);
+    await twitchMonitor.reconfigure(config);
+    await interaction.reply({ content: 'Configuração Twitch salva e serviços reconectados.', ephemeral: true });
+  } catch (error) {
+    console.error('Erro ao reconectar serviços Twitch:', error);
+    await interaction.reply({ content: 'Configuração salva, mas não foi possível iniciar os serviços. Verifique permissões e credenciais.', ephemeral: true });
+  }
 }
 
 export async function handleAdminCommand(interaction: CommandInteraction, prisma: PrismaClient) {
