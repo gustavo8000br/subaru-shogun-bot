@@ -2,11 +2,15 @@ import { Client, Events, GatewayIntentBits, Interaction, REST, Routes, SlashComm
 import { PrismaClient } from '@prisma/client';
 import { buildAdminCommands, handleAdminCommand, handleSquadButtonInteraction, handleMemberSelection, handleSquadPanel } from './commands/adminCommands.js';
 import { SquadManager } from './squadManager.js';
+import { TwitchChatService } from './services/twitchChat.js';
+import { TwitchMonitorService } from './services/twitchMonitor.js';
 
 export class SubaruShogunBot {
   private client: Client;
   private prisma: PrismaClient;
   private squadManager: SquadManager;
+  private twitchChat: TwitchChatService;
+  private twitchMonitor: TwitchMonitorService;
 
   constructor() {
     this.client = new Client({
@@ -20,6 +24,8 @@ export class SubaruShogunBot {
 
     this.prisma = new PrismaClient();
     this.squadManager = new SquadManager(this.client, this.prisma);
+    this.twitchChat = new TwitchChatService(this.client);
+    this.twitchMonitor = new TwitchMonitorService(this.client);
 
     this.setupEvents();
   }
@@ -29,6 +35,8 @@ export class SubaruShogunBot {
       console.log(`Bot online: ${this.client.user?.tag}`);
       await this.squadManager.start();
       await this.registerCommands();
+      await this.twitchChat.start();
+      await this.twitchMonitor.start();
     });
 
     this.client.on(Events.InteractionCreate, async (interaction) => {
