@@ -1,0 +1,5 @@
+-- Baseline marker for the pre-existing production database.
+--
+-- On an existing installation, mark this migration as applied only after
+-- taking a backup. The following migration performs the non-destructive
+-- schema reconciliation against the legacy tables.

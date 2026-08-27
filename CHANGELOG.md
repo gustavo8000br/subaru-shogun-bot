@@ -2,6 +2,17 @@
 
 Todas as mudanças relevantes do ShogunBot são documentadas neste arquivo.
 
+## [2.2.0] - 2026-08-27
+
+### Modificado
+
+- Versão completa estabelecida como `v2.2.0-1cddaad-alpha`, com `alpha` como estágio atual.
+
+### Corrigido
+
+- Adicionada reconciliação versionada e idempotente para instalações PostgreSQL legadas sem histórico Prisma, com instruções de backup e baseline antes do deploy.
+- O `clientSecret` legado é removido sem ser selecionado ou exposto; as credenciais Twitch continuam somente no ambiente/runtime.
+
 ## [2.1.0] - 2026-08-27
 
 ### Modificado

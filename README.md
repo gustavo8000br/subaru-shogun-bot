@@ -89,7 +89,18 @@ npm start
 
 O fluxo automatizado de implantação está em `deploy.sh` e usa `docker compose` para construir a aplicação, aplicar migrações versionadas e registrar os comandos. O script usa apenas Bash no host para preparar um arquivo temporário, sem exibir valores, preenchendo `POSTGRES_DB`, `POSTGRES_USER` e `POSTGRES_PASSWORD` ausentes a partir da `DATABASE_URL` interna já configurada; Node.js não é necessário na VPS. O arquivo é removido ao terminar; não coloque segredos no repositório.
 
-Em uma instalação existente sem essas três variáveis no `.env`, confirme operacionalmente que `DATABASE_URL` continua usando o usuário legado, o banco `subaru_shogun`, a porta `5432` e o host interno `db`; preserve a senha existente sem registrá-la. Em seguida, execute `./deploy.sh`. O bootstrap não remove volumes, não executa `down` e não altera credenciais de um volume PostgreSQL já inicializado. Se a URL não estiver disponível ou não usar o host interno `db`, interrompa o deploy e corrija o ambiente manualmente sem registrar a URL em logs. Em uma instalação sem histórico de migrações, faça o baseline do schema uma única vez com revisão operacional antes de usar `migrate deploy`.
+Em uma instalação existente sem essas três variáveis no `.env`, confirme operacionalmente que `DATABASE_URL` continua usando o usuário legado, o banco `subaru_shogun`, a porta `5432` e o host interno `db`; preserve a senha existente sem registrá-la. Em seguida, faça um backup e registre o baseline uma única vez antes de executar `./deploy.sh`:
+
+```bash
+docker exec subaru-shogun-db sh -c 'pg_dump --format=custom -U "$POSTGRES_USER" -d "$POSTGRES_DB"' > "backup-pre-migration-$(date +%Y%m%d%H%M%S).dump"
+compose_env="$(mktemp)"; trap 'rm -f "$compose_env"' EXIT
+bash scripts/bootstrap-compose-env.sh "$compose_env"
+docker compose --env-file "$compose_env" build app
+docker compose --env-file "$compose_env" run --rm --no-deps app npx prisma migrate resolve --applied 20260827_000000_legacy_baseline
+./deploy.sh
+```
+
+O primeiro comando grava somente o dump binário local e não imprime a URL ou a senha. O baseline é apenas um marcador do schema legado; a migration seguinte reconcilia colunas, índices e tabelas sem resetar ou apagar dados. Ela preenche `guildId` legado com `legacy`, remove apenas o índice global substituído e remove o `clientSecret` legado sem ler, imprimir ou copiar seu valor. Antes do deploy, rotacione/reconfigure `TWITCH_CLIENT_SECRET` no ambiente/runtime; nunca registre o segredo. Se a URL não estiver disponível ou não usar o host interno `db`, interrompa o deploy e corrija o ambiente manualmente. O bootstrap não remove volumes, não executa `down` e não altera credenciais de um volume PostgreSQL já inicializado.
 
 As credenciais Twitch não são armazenadas no banco: `TWITCH_CLIENT_ID` e `TWITCH_CLIENT_SECRET` devem permanecer somente no ambiente/runtime. A configuração `/twitch config credentials` salva apenas o Client ID.
 
