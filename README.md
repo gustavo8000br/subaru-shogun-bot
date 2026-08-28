@@ -2,7 +2,7 @@
 
 Bot Discord do servidor SubaruShogun, responsável por squads temporárias, LFG com filtros de elo, economia por participação em voz, reputação, eventos agendados e integração com Twitch.
 
-Versão atual: `v2.1.0-2105fef-alpha`.
+Versão atual: `v2.2.1-86287a2-alpha`.
 
 O versionamento segue a política em [VERSIONING.md](VERSIONING.md). Antes de cada commit, atualize a versão completa, os espelhos e o changelog conforme essa política.
 
@@ -60,6 +60,8 @@ Suba o PostgreSQL pelo Docker:
 ```bash
 docker compose up -d db
 ```
+
+O serviço `app` usa DNS explícito `1.1.1.1`, `1.0.0.1` e `8.8.8.8`. Para uma recuperação local completa, com o `.env` válido presente, execute `docker compose down -v && docker network prune -f && docker volume prune -f` somente neste projeto e depois recrie os serviços.
 
 Gere o cliente Prisma e aplique o schema:
 

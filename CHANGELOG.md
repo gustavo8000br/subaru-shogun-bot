@@ -2,6 +2,17 @@
 
 Todas as mudanças relevantes do ShogunBot são documentadas neste arquivo.
 
+## [2.2.1] - 2026-08-27
+
+### Modificado
+
+- Versão completa estabelecida como `v2.2.1-86287a2-alpha`, com `alpha` como estágio atual.
+
+### Corrigido
+
+- Deploy Docker mantém DNS explícito do Cloudflare e Google no serviço `app` para reduzir falhas de resolução no ambiente local.
+- Reset autorizado da rede e dos volumes Docker foi documentado como parte da recuperação operacional local.
+
 ## [2.2.0] - 2026-08-27
 
 ### Modificado

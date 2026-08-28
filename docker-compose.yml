@@ -11,7 +11,9 @@ services:
     dns:
       - 1.1.1.1
       - 1.0.0.1
-      - 8.8.8.8
+    extra_hosts:
+      - "discord.com:162.159.138.232"
+      - "gateway.discord.gg:162.159.128.233"
     networks:
       - bot-internal
 

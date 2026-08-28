@@ -25,7 +25,30 @@ Thumbs.db
 .idea/
 *.swp
 
+# ==========================================
+# AIOX Framework - Ignorar Estado & Cache
+# ==========================================
+# Caches de execução e sessões locais
+.aiox-core/cache/
+.aiox-core/sessions/
+.aiox-core/logs/
+.aiox-core/tmp/
+
+# Arquivos de estado local e histórico de rotinas
+.aiox-core/*.log
+.aiox-core/state.json
+.aiox-core/history/
+
 # AIOX Local (AIOX)
 .aiox-core/local/
 .claude/settings.local.json
 .aiox/install-log.txt
+
+# Framework AIOX e Ferramentas de IA / IDEs
+.aiox-core/
+.claude/
+.cursor/
+.gemini/
+.kimi/
+.codex/
+.antigravity/
