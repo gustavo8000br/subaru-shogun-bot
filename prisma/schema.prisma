@@ -7,192 +7,230 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model GuildConfig {
+  guildId             String   @id
+  maxSquadsPerGame    Int      @default(10)
+  maxMembersPerSquad  Int      @default(15)
+  emptySquadTimeoutMs BigInt   @default(300000)
+  inactivityTimeoutMs BigInt   @default(86400000)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
 model Game {
   id        String   @id @default(cuid())
   guildId   String   @default("legacy")
   name      String
+  config    Json?    @default("{}")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   squads    Squad[]
 
   @@unique([guildId, name])
+  @@unique([guildId, id])
 }
 
 model UserProfile {
-  id             String   @id @default(cuid())
-  discordId      String   @unique
-  shogunCoins    Int      @default(0)
-  ranks          Json     @default("{}")
-  reputationScore Int     @default(0)
-  ggCount        Int      @default(0)
-  honorCount     Int      @default(0)
-  voiceMinutes   Int      @default(0)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  voiceSessions  VoiceSession[]
-  inventory      UserInventory[]
-  scheduledCreated ScheduledSquad[] @relation("ScheduledSquadCreator")
-  blacklists     SquadBlacklist[] @relation("BlacklistedUser")
-  blacklistCreated SquadBlacklist[] @relation("BlacklistCreator")
-  auditLogs      AuditLog[]
+  id                 String                   @id @default(cuid())
+  guildId            String
+  discordId          String
+  shogunCoins        Int                      @default(0)
+  ranks              Json                     @default("{}")
+  reputationScore    Int                      @default(0)
+  ggCount            Int                      @default(0)
+  honorCount         Int                      @default(0)
+  voiceMinutes       Int                      @default(0)
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+  voiceSessions      VoiceSession[]
+  inventory          UserInventory[]
+  ownedSquads        Squad[]                  @relation("SquadOwner")
+  scheduledAttendees ScheduledSquadAttendee[]
+  scheduledCreated   ScheduledSquad[]         @relation("ScheduledSquadCreator")
+  blacklists         SquadBlacklist[]         @relation("BlacklistedUser")
+  blacklistCreated   SquadBlacklist[]         @relation("BlacklistCreator")
+  auditLogs          AuditLog[]
+
+  @@unique([guildId, discordId])
+  @@unique([guildId, id])
+  @@index([guildId])
 }
 
 model VoiceSession {
-  id          String   @id @default(cuid())
-  userId      String
-  user        UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
-  squadId     String?
-  squad       Squad? @relation(fields: [squadId], references: [id], onDelete: SetNull)
-  startedAt   DateTime @default(now())
-  endedAt     DateTime?
-  minutesAwarded Int    @default(0)
-  active      Boolean  @default(true)
+  id             String      @id @default(cuid())
+  guildId        String
+  userId         String
+  user           UserProfile @relation(fields: [guildId, userId], references: [guildId, id], onDelete: Cascade)
+  squadId        String?
+  squad          Squad?      @relation(fields: [guildId, squadId], references: [guildId, id], onDelete: Cascade)
+  startedAt      DateTime    @default(now())
+  endedAt        DateTime?
+  minutesAwarded Int         @default(0)
+  active         Boolean     @default(true)
 
-  @@index([userId, active])
+  @@index([guildId, userId, active])
   @@index([squadId, active])
 }
 
 model UserInventory {
-  id        String @id @default(cuid())
+  id        String      @id @default(cuid())
+  guildId   String
   userId    String
-  user      UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      UserProfile @relation(fields: [guildId, userId], references: [guildId, id], onDelete: Cascade)
   itemId    String
-  quantity  Int    @default(1)
-  createdAt DateTime @default(now())
+  quantity  Int         @default(1)
+  createdAt DateTime    @default(now())
 
-  @@unique([userId, itemId])
+  @@unique([guildId, userId, itemId])
+  @@index([guildId, userId])
 }
 
 model TwitchConfig {
-  id             String   @id @default(cuid())
-  guildId        String   @unique
-  clientId       String?
-  channelName    String?
-  chatChannelId  String?
+  id                String   @id @default(cuid())
+  guildId           String   @unique
+  clientId          String?
+  channelName       String?
+  chatChannelId     String?
   announceChannelId String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }
 
 model Squad {
-  id             String        @id @default(cuid())
-  guildId        String        @default("legacy")
-  gameId         String
-  game           Game          @relation(fields: [gameId], references: [id])
-  name           String
-  ownerId        String
-  minRank        String?
-  maxRank        String?
-  voiceChannelId String?       @unique
-  textChannelId  String?       @unique
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  lastActivityAt DateTime      @default(now())
-  members        SquadMember[]
-  blacklists     SquadBlacklist[]
-  voiceSessions  VoiceSession[]
+  id                     String                  @id @default(cuid())
+  guildId                String                  @default("legacy")
+  gameId                 String
+  game                   Game                    @relation(fields: [guildId, gameId], references: [guildId, id])
+  name                   String
+  ownerId                String
+  owner                  UserProfile             @relation("SquadOwner", fields: [guildId, ownerId], references: [guildId, discordId])
+  minRank                String?
+  maxRank                String?
+  voiceChannelId         String?                 @unique
+  textChannelId          String?                 @unique
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  lastActivityAt         DateTime                @default(now())
+  status                 String                  @default("active")
+  lockedAt               DateTime?
+  members                SquadMember[]
+  blacklists             SquadBlacklist[]
+  voiceSessions          VoiceSession[]
+  reputationParticipants ReputationParticipant[]
+  reputationVotes        ReputationVote[]
 
-  @@index([gameId])
-  @@index([guildId])
+  @@unique([guildId, id])
+  @@index([guildId, gameId, status])
   @@index([lastActivityAt])
 }
 
 model SquadMember {
-  id        String   @id @default(cuid())
-  squadId   String
-  squad     Squad    @relation(fields: [squadId], references: [id])
-  userId    String
-  joinedAt  DateTime @default(now())
+  id       String   @id @default(cuid())
+  guildId  String
+  squadId  String
+  squad    Squad    @relation(fields: [guildId, squadId], references: [guildId, id], onDelete: Cascade)
+  userId   String
+  joinedAt DateTime @default(now())
 
-  @@unique([squadId, userId])
-  @@index([userId])
+  @@unique([guildId, squadId, userId])
+  @@index([guildId, userId])
 }
 
 model ScheduledSquad {
-  id            String   @id @default(cuid())
-  title         String
-  game          String
-  scheduledTime DateTime
-  creatorId     String
-  creator       UserProfile @relation("ScheduledSquadCreator", fields: [creatorId], references: [id])
-  minElo        String?
-  maxElo        String?
-  status        String   @default("scheduled")
+  id             String                   @id @default(cuid())
+  guildId        String
+  title          String
+  game           String
+  scheduledTime  DateTime
+  creatorId      String
+  creator        UserProfile              @relation("ScheduledSquadCreator", fields: [guildId, creatorId], references: [guildId, id])
+  minElo         String?
+  maxElo         String?
+  status         String                   @default("scheduled")
   discordEventId String?
-  channelId     String?
-  createdAt     DateTime @default(now())
-  attendees     ScheduledSquadAttendee[]
+  channelId      String?
+  createdAt      DateTime                 @default(now())
+  attendees      ScheduledSquadAttendee[]
 
-  @@index([scheduledTime, status])
+  @@unique([guildId, id])
+  @@index([guildId, scheduledTime, status])
 }
 
 model ScheduledSquadAttendee {
-  id              String @id @default(cuid())
+  id               String         @id @default(cuid())
+  guildId          String
   scheduledSquadId String
-  userId          String
-  scheduledSquad  ScheduledSquad @relation(fields: [scheduledSquadId], references: [id], onDelete: Cascade)
+  userId           String
+  scheduledSquad   ScheduledSquad @relation(fields: [guildId, scheduledSquadId], references: [guildId, id], onDelete: Cascade)
+  user             UserProfile    @relation(fields: [guildId, userId], references: [guildId, id], onDelete: Cascade)
 
-  @@unique([scheduledSquadId, userId])
+  @@unique([guildId, scheduledSquadId, userId])
 }
 
 model SquadBlacklist {
-  id          String   @id @default(cuid())
-  squadId     String
-  userId      String
-  creatorId   String
-  reason      String?
-  createdAt   DateTime @default(now())
-  squad       Squad @relation(fields: [squadId], references: [id], onDelete: Cascade)
-  user        UserProfile @relation("BlacklistedUser", fields: [userId], references: [id], onDelete: Cascade)
-  creator     UserProfile @relation("BlacklistCreator", fields: [creatorId], references: [id])
+  id        String      @id @default(cuid())
+  guildId   String
+  squadId   String
+  userId    String
+  creatorId String
+  reason    String?
+  createdAt DateTime    @default(now())
+  squad     Squad       @relation(fields: [guildId, squadId], references: [guildId, id], onDelete: Cascade)
+  user      UserProfile @relation("BlacklistedUser", fields: [guildId, userId], references: [guildId, id], onDelete: Cascade)
+  creator   UserProfile @relation("BlacklistCreator", fields: [guildId, creatorId], references: [guildId, id])
 
-  @@unique([squadId, userId])
+  @@unique([guildId, squadId, userId])
 }
 
 model AuditLog {
-  id        String   @id @default(cuid())
+  id        String       @id @default(cuid())
   guildId   String
   actorId   String?
-  actor     UserProfile? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actor     UserProfile? @relation(fields: [guildId, actorId], references: [guildId, id])
   eventType String
   targetId  String?
-  details   Json     @default("{}")
-  createdAt DateTime @default(now())
+  details   Json         @default("{}")
+  createdAt DateTime     @default(now())
 
   @@index([guildId, createdAt])
 }
 
 model ReputationParticipant {
   id        String   @id @default(cuid())
+  guildId   String
   squadId   String
   userId    String
   expiresAt DateTime
   createdAt DateTime @default(now())
+  squad     Squad    @relation(fields: [guildId, squadId], references: [guildId, id], onDelete: Cascade)
 
-  @@unique([squadId, userId])
-  @@index([squadId, expiresAt])
+  @@unique([guildId, squadId, userId])
+  @@index([guildId, squadId, expiresAt])
 }
 
 model ReputationVote {
   id        String   @id @default(cuid())
+  guildId   String
   squadId   String
   voterId   String
   targetId  String
   type      String
   createdAt DateTime @default(now())
+  squad     Squad    @relation(fields: [guildId, squadId], references: [guildId, id], onDelete: Cascade)
 
-  @@unique([squadId, voterId, targetId, type])
-  @@index([squadId, voterId])
+  @@unique([guildId, squadId, voterId, targetId, type])
+  @@index([guildId, squadId, voterId])
 }
 
 model PurchaseLedger {
-  id            String   @id @default(cuid())
-  requestId     String
-  userId        String
-  itemId        String
-  price         Int
-  createdAt     DateTime @default(now())
+  id        String   @id @default(cuid())
+  guildId   String
+  requestId String
+  userId    String
+  itemId    String
+  price     Int
+  createdAt DateTime @default(now())
 
-  @@unique([userId, requestId])
-  @@index([userId, createdAt])
+  @@unique([guildId, userId, requestId])
+  @@index([guildId, userId, createdAt])
 }

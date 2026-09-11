@@ -1,11 +1,33 @@
-import { Client, Events, GatewayIntentBits, Interaction, REST, Routes, SlashCommandBuilder, Collection, ButtonInteraction, StringSelectMenuInteraction } from 'discord.js';
-import { PrismaClient } from '@prisma/client';
-import { buildAdminCommands, handleAdminCommand, handleSquadButtonInteraction, handleMemberSelection, handleSquadPanel, handleTwitchCommand, handleEconomyCommand, handleProfileOrTopCommand, handleReportCommand, handleVersionCommand } from './commands/adminCommands.js';
-import { SquadManager } from './squadManager.js';
-import { TwitchChatService } from './services/twitchChat.js';
-import { TwitchMonitorService } from './services/twitchMonitor.js';
-import { resolveTwitchConfig } from './services/twitchConfig.js';
-import { VoiceEconomyService } from './services/voiceEconomy.js';
+import {
+  Client,
+  Events,
+  GatewayIntentBits,
+  Interaction,
+  REST,
+  Routes,
+  SlashCommandBuilder,
+  Collection,
+  ButtonInteraction,
+  StringSelectMenuInteraction,
+} from "discord.js";
+import { PrismaClient } from "@prisma/client";
+import {
+  buildAdminCommands,
+  handleAdminCommand,
+  handleSquadButtonInteraction,
+  handleMemberSelection,
+  handleSquadPanel,
+  handleTwitchCommand,
+  handleEconomyCommand,
+  handleProfileOrTopCommand,
+  handleReportCommand,
+  handleVersionCommand,
+} from "./commands/adminCommands.js";
+import { SquadManager } from "./squadManager.js";
+import { TwitchChatService } from "./services/twitchChat.js";
+import { TwitchMonitorService } from "./services/twitchMonitor.js";
+import { resolveTwitchConfig } from "./services/twitchConfig.js";
+import { VoiceEconomyService } from "./services/voiceEconomy.js";
 
 export class SubaruShogunBot {
   private client: Client;
@@ -52,34 +74,39 @@ export class SubaruShogunBot {
 
     this.client.on(Events.InteractionCreate, async (interaction) => {
       if (interaction.isCommand()) {
-        if (['balance', 'shop', 'buy'].includes(interaction.commandName)) {
+        if (["balance", "shop", "buy"].includes(interaction.commandName)) {
           await handleEconomyCommand(interaction, this.prisma);
           return;
         }
-        if (interaction.commandName === 'versao') {
+        if (interaction.commandName === "versao") {
           await handleVersionCommand(interaction);
           return;
         }
-        if (['profile', 'top'].includes(interaction.commandName)) {
+        if (["profile", "top"].includes(interaction.commandName)) {
           await handleProfileOrTopCommand(interaction, this.prisma);
           return;
         }
-        if (interaction.commandName === 'report') {
+        if (interaction.commandName === "report") {
           await handleReportCommand(interaction, this.prisma);
           return;
         }
-        if (interaction.commandName === 'admin') {
+        if (interaction.commandName === "admin") {
           await handleAdminCommand(interaction, this.prisma);
           return;
         }
 
-        if (interaction.commandName === 'squad') {
+        if (interaction.commandName === "squad") {
           await handleSquadPanel(interaction, this.prisma, this.squadManager);
           return;
         }
 
-        if (interaction.commandName === 'twitch') {
-          await handleTwitchCommand(interaction, this.prisma, this.twitchChat, this.twitchMonitor);
+        if (interaction.commandName === "twitch") {
+          await handleTwitchCommand(
+            interaction,
+            this.prisma,
+            this.twitchChat,
+            this.twitchMonitor,
+          );
           return;
         }
       }
@@ -98,7 +125,7 @@ export class SubaruShogunBot {
         await this.squadManager.handleVoiceStateUpdate(oldState, newState);
         await this.voiceEconomy.handleVoiceStateUpdate(oldState, newState);
       } catch (error) {
-        console.error('Erro ao processar alteração de voz:', error);
+        console.error("Erro ao processar alteração de voz:", error);
       }
     });
 
@@ -106,18 +133,46 @@ export class SubaruShogunBot {
       try {
         await this.squadManager.handleMessageCreate(message);
       } catch (error) {
-        console.error('Erro ao processar mensagem:', error);
+        console.error("Erro ao processar mensagem:", error);
       }
     });
   }
 
   private async notifyScheduledSquads() {
     const now = Date.now();
-    const upcoming = await this.prisma.scheduledSquad.findMany({ where: { status: 'scheduled', scheduledTime: { lte: new Date(now + 15 * 60 * 1000), gte: new Date(now) } }, include: { attendees: true } });
-    for (const scheduled of upcoming) {
-      const channel = scheduled.channelId ? this.client.channels.cache.get(scheduled.channelId) : undefined;
-      if (channel?.isTextBased() && 'send' in channel) await channel.send({ content: `Lembrete: **${scheduled.title}** começa em 15 minutos. ${scheduled.attendees.map(attendee => `<@${attendee.userId}>`).join(' ')}`, allowedMentions: { parse: [] } });
-      await this.prisma.scheduledSquad.update({ where: { id: scheduled.id }, data: { status: 'notified' } });
+    for (const guild of this.client.guilds.cache.values()) {
+      const upcoming = await this.prisma.scheduledSquad.findMany({
+        where: {
+          guildId: guild.id,
+          status: "scheduled",
+          scheduledTime: {
+            lte: new Date(now + 15 * 60 * 1000),
+            gte: new Date(now),
+          },
+        },
+        include: { attendees: true },
+      });
+      for (const scheduled of upcoming) {
+        const channel = scheduled.channelId
+          ? this.client.channels.cache.get(scheduled.channelId)
+          : undefined;
+        if (
+          channel &&
+          "guild" in channel &&
+          channel.guild.id === guild.id &&
+          channel.isTextBased() &&
+          "send" in channel
+        ) {
+          await channel.send({
+            content: `Lembrete: **${scheduled.title}** começa em 15 minutos. ${scheduled.attendees.map((attendee) => `<@${attendee.userId}>`).join(" ")}`,
+            allowedMentions: { parse: [] },
+          });
+        }
+        await this.prisma.scheduledSquad.updateMany({
+          where: { id: scheduled.id, guildId: guild.id },
+          data: { status: "notified" },
+        });
+      }
     }
   }
 
@@ -127,17 +182,19 @@ export class SubaruShogunBot {
     const guildId = process.env.GUILD_ID;
 
     if (!token || !clientId || !guildId) {
-      throw new Error('DISCORD_TOKEN, CLIENT_ID e GUILD_ID devem estar definidos.');
+      throw new Error(
+        "DISCORD_TOKEN, CLIENT_ID e GUILD_ID devem estar definidos.",
+      );
     }
 
-    const rest = new REST({ version: '10' }).setToken(token);
+    const rest = new REST({ version: "10" }).setToken(token);
     const commands = buildAdminCommands();
 
     await rest.put(Routes.applicationGuildCommands(clientId, guildId), {
       body: commands,
     });
 
-    console.log('Comandos registrados com sucesso.');
+    console.log("Comandos registrados com sucesso.");
   }
 
   public async login() {

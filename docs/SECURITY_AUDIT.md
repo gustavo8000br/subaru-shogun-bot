@@ -13,22 +13,22 @@ A aplicação não deve ser considerada pronta para um ambiente hostil sem corri
 
 ## Status da remediação
 
-| Achado | Status | Risco residual |
-|---|---|---|
-| SEC-001 | Corrigido no código | Imagens/cache antigos exigem limpeza e rotação operacional de credenciais. |
-| SEC-002 | Corrigido | Permissões efetivas do Discord devem ser confirmadas na guild real. |
-| SEC-003 | Corrigido para novos dados | O segredo continua necessário no runtime; registros antigos exigem rotação/remoção operacional. |
-| SEC-004 | Corrigido | Votos legados não foram reconstruídos; elegibilidade depende da migração aplicada. |
-| SEC-005 | Corrigido | Ledger não substitui reconciliação de saldos já inconsistentes. |
-| SEC-006 | Corrigido | Rate limit é por processo; múltiplas réplicas exigem limitador compartilhado. |
-| SEC-007 | Parcial | Compose exige credenciais externas e rede interna; `deploy.sh` faz bootstrap temporário das variáveis ausentes a partir da URL interna, sem defaults de senha. VPS, firewall, backups e permissões do host não foram auditados. |
-| SEC-008 | Corrigido no Dockerfile | Filesystem somente leitura e capabilities mínimas ainda dependem da política de deploy. |
-| SEC-009 | Em aberto | `npm audit --omit=dev` ainda reporta 3 high em `deepmerge-ts` transitivo do Prisma; atualização compatível precisa ser avaliada. |
-| SEC-010 | Parcial | Há testes de utilitários e scripts de qualidade; testes de integração Discord/concorrência exigem harness e banco de teste. |
-| SEC-011 | Parcial | Novos jogos/squads são escopados por guild; perfis e dados legados ainda usam IDs Discord globais. |
-| SEC-012 | Corrigido | Requer validação em guild real para confirmar permissões de desconexão. |
-| SEC-013 | Corrigido | Anúncios `@everyone` foram desativados; limites de outros fluxos externos ainda merecem teste de integração. |
-| SEC-014 | Corrigido no fluxo | Migração foi adicionada, mas baseline de banco existente, backup, rollout e rollback são operações da VPS. |
+| Achado  | Status                     | Risco residual                                                                                                                                                                                                                                  |
+| ------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| SEC-001 | Corrigido no código        | Imagens/cache antigos exigem limpeza e rotação operacional de credenciais.                                                                                                                                                                      |
+| SEC-002 | Corrigido                  | Permissões efetivas do Discord devem ser confirmadas na guild real.                                                                                                                                                                             |
+| SEC-003 | Corrigido para novos dados | O segredo continua necessário no runtime; registros antigos exigem rotação/remoção operacional.                                                                                                                                                 |
+| SEC-004 | Corrigido                  | Votos legados não foram reconstruídos; elegibilidade depende da migração aplicada.                                                                                                                                                              |
+| SEC-005 | Corrigido                  | Ledger não substitui reconciliação de saldos já inconsistentes.                                                                                                                                                                                 |
+| SEC-006 | Corrigido                  | Rate limit é por processo; múltiplas réplicas exigem limitador compartilhado.                                                                                                                                                                   |
+| SEC-007 | Parcial                    | Compose exige credenciais externas e rede interna; `deploy.sh` faz bootstrap temporário das variáveis ausentes a partir da URL interna, sem defaults de senha. VPS, firewall, backups e permissões do host não foram auditados.                 |
+| SEC-008 | Corrigido no Dockerfile    | Filesystem somente leitura e capabilities mínimas ainda dependem da política de deploy.                                                                                                                                                         |
+| SEC-009 | Exceção documentada        | `npm audit --omit=dev` e `npm audit` reportam 3 high em `deepmerge-ts@7.1.5`, transitivo de `@prisma/config@6.19.3`/`prisma@6.19.3`; o pacote corrigido é 8.x, mas não há atualização compatível na linha Prisma 6 que altere essa dependência. |
+| SEC-010 | Parcial                    | Há testes de utilitários e scripts de qualidade; testes de integração Discord/concorrência exigem harness e banco de teste.                                                                                                                     |
+| SEC-011 | Parcial                    | Novos jogos/squads são escopados por guild; perfis e dados legados ainda usam IDs Discord globais.                                                                                                                                              |
+| SEC-012 | Corrigido                  | Requer validação em guild real para confirmar permissões de desconexão.                                                                                                                                                                         |
+| SEC-013 | Corrigido                  | Anúncios `@everyone` foram desativados; limites de outros fluxos externos ainda merecem teste de integração.                                                                                                                                    |
+| SEC-014 | Corrigido no fluxo         | Migração foi adicionada, mas baseline de banco existente, backup, rollout e rollback são operações da VPS.                                                                                                                                      |
 
 ## Achados
 
@@ -99,10 +99,10 @@ A aplicação não deve ser considerada pronta para um ambiente hostil sem corri
 ### SEC-009 - Dependências reportam vulnerabilidades high
 
 **Severidade:** Média
-**Evidência:** `npm audit --omit=dev` reportou 3 vulnerabilidades high em `deepmerge-ts`, transitivo de `@prisma/config`/Prisma.
-**Impacto:** superfície de risco em ferramentas de build/CLI; a exploração depende do caminho de uso da dependência.
+**Evidência:** em 2026-09-03, `npm audit --omit=dev` e `npm audit` reportaram 3 vulnerabilidades high em `deepmerge-ts@7.1.5`, pela cadeia `prisma@6.19.3` → `@prisma/config@6.19.3` → `deepmerge-ts@7.1.5`. O advisory é GHSA-ggr8-5vv4-36mx (stack exhaustion em grafos recursivos); `deepmerge-ts@8.0.2` é corrigido, mas `@prisma/config@6.19.3` fixa 7.1.5 e a atualização Prisma 6 compatível disponível não remove a cadeia.
+**Impacto:** a dependência está no tooling do Prisma e não é importada pelo runtime compilado do bot; a exploração depende de entrada recursiva alcançar o merge do CLI/configuração. O risco residual permanece em desenvolvimento/build, e não foi usado `npm audit fix` cego nem override incompatível.
 
-**Correção recomendada:** avaliar atualização compatível do Prisma, fixar versão corrigida, executar o audit completo em CI e documentar qualquer exceção.
+**Exceção:** manter Prisma 6.19.3 até existir release compatível que atualize `deepmerge-ts`, acompanhar o advisory e reavaliar antes do próximo upgrade major. O audit completo deve continuar no CI.
 
 ### SEC-010 - Ausência de testes de segurança, rate limits e validação centralizada
 
@@ -151,6 +151,12 @@ A aplicação não deve ser considerada pronta para um ambiente hostil sem corri
 - `prisma validate` passou; informou somente o carregamento de `.env`, sem expor valores.
 - O deploy aplica o schema Prisma antes de reiniciar o app, mas usa `db push` e requer o hardening de SEC-014.
 - Existe trilha inicial de auditoria para denúncias e bans, que pode ser expandida para eventos de segurança.
+
+### Twitch: opt-in e purge
+
+`resolveTwitchConfig` só resolve uma configuração existente e completa para a própria `guildId`; variáveis de ambiente não servem como fallback de guild. O segredo Twitch é lido somente do ambiente em runtime e não é persistido nem exposto em logs. O startup percorre as guilds conectadas, mas somente inicia serviços quando esse opt-in explícito resolve com sucesso.
+
+O purge automático ao terminar uma live foi desativado. Como o relay não mantém marcador seguro e persistente nas mensagens enviadas, não há base comprovável para distinguir mensagens do bot de mensagens genéricas; portanto nenhuma mensagem é apagada.
 
 ## Plano recomendado
 
