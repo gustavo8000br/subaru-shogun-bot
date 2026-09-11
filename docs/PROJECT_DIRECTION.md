@@ -159,12 +159,15 @@ As issues #1 a #8 continuam válidas, mas deixam de ser o roadmap completo. Elas
 | P0         | #8                     | Definir agora o que é global e o que é por guild. Saldo, reputação, jogos, permissões e auditoria não podem ficar ambíguos.                                               |
 | P0         | #3                     | Preservar limites configuráveis por guild mesmo sob operações simultâneas.                                                                                                |
 | P0         | #4                     | Tornar Discord e persistência convergentes, com recuperação segura e auditável.                                                                                           |
-| P0         | #5                     | Formalizar lifecycle, atividade, expiração e recuperação após restart.                                                                                                    |
+| P0         | #7                     | Formalizar a política base de atividade, expiração e recuperação após restart. É pré-requisito da Fase 1, não item de evolução.                                          |
 | P0         | #6                     | Definir e validar a matriz de permissões dos canais temporários.                                                                                                          |
+| P0         | #5                     | Estabelecer o baseline de testes (duas guilds, PostgreSQL real, clock controlado, adapter Discord falso) e fechar a suíte sobre o núcleo implementado. É o gate da Fase 1. |
 | P0         | Auditoria de segurança | Tratar achados abertos e risco residual como bloqueadores para distribuição ampla. Especial atenção a dependências, testes de integração, deployment e dados multi-guild. |
 | P1         | #1                     | Corrigir a apresentação dos membros na reputação como parte da experiência mínima do membro.                                                                              |
-| P1         | #7                     | Evoluir a política de expiração para configuração por guild depois que o lifecycle base estiver estável.                                                                  |
+| P1         | #7 (parte configurável) | Mover os timeouts já definidos para configuração por guild depois que o lifecycle base estiver estável. Corresponde à Story 1.6, na Fase 2.                              |
 | P2         | #2                     | Entregar recompensas Twitch como módulo opcional, após o núcleo universal e a configuração por guild.                                                                     |
+
+> **Correção de rastreabilidade (2026-09-11, @architect):** a versão anterior desta tabela atribuía a #5 a descrição do lifecycle e rebaixava #7 a P1. A política base de atividade/expiração é da **#7** e é **P0** (bloqueia a Fase 1); apenas a parte configurável por guild é P1 (Story 1.6, Fase 2). A **#5** é o baseline e o fechamento da suíte de testes, e é P0 por ser o gate da Fase 1. A ordem de execução autoritativa está na issue #9.
 
 ## 9. Fases de entrega
 
@@ -308,7 +311,7 @@ As decisões abaixo precisam de uma resposta registrada antes de transformar a d
 ### 12.2 Dependências de sequência
 
 1. PO aprova a matriz de escopo, o corte de módulos da Fase 1, a política de dados e a migração.
-2. Architect aprova topologia, fronteiras de configuração/runtime, matriz de permissões e estratégia de reconciliação.
+2. Architect aprova topologia, fronteiras de configuração/runtime, matriz de permissões e estratégia de reconciliação. — **CONCLUÍDO em 2026-09-11.** As decisões estão em [ARCHITECTURE_DECISIONS.md](ARCHITECTURE_DECISIONS.md) (ADR-001 a ADR-006). Vereditos por story: 0.1 GO com condições, 0.2 GO condicionado, 0.3 GO, 0.4 NO-GO até incorporar as emendas registradas na própria story.
 3. Só então o trabalho de schema e implementação pode ser quebrado em stories; #8 precede qualquer mudança de persistência, e #3–#6 precedem o gate da Fase 1.
 4. #1 pode ser entregue como correção independente de UX. #2 permanece bloqueada até o núcleo universal estar aprovado.
 
@@ -325,5 +328,7 @@ As decisões abaixo precisam de uma resposta registrada antes de transformar a d
 O próximo trabalho de produto deve preparar a Fase 0 e a Fase 1. Não priorizar novas recompensas Twitch ou customizações avançadas antes de resolver escopo multi-guild, configuração por guild, permissões, lifecycle e reconciliação. A proposta de valor universal depende de o dono conseguir operar o bot com segurança e de uma guild não conseguir afetar outra.
 
 **Veredito desta validação:** NO-GO para iniciar a implementação da Fase 1; GO condicionado para executar a Fase 0. O documento fica executável como direção e backlog de decisões, mas a implementação deve aguardar o fechamento dos bloqueios de 12.1 e as aprovações da sequência de 12.2.
+
+**Atualização de 2026-09-11 (@architect):** o item 2 da sequência de 12.2 está fechado — topologia, fronteira configuração/runtime, concorrência, reconciliação, permissões, lifecycle, registro de comandos e credenciais Twitch estão decididos em [ARCHITECTURE_DECISIONS.md](ARCHITECTURE_DECISIONS.md). O veredito de Fase 1 continua **NO-GO** até que (a) o PO registre sua aprovação do item 1 de 12.2, (b) a Story 0.4 incorpore as emendas apontadas pelo Architect e (c) a Story 0.5 entregue o baseline de testes. Seis decisões de produto seguem abertas e estão listadas ao final do ADR.
 
 Este documento define direção e prioridades. Ele não substitui a validação do PO, as decisões arquiteturais nem as stories de implementação.
