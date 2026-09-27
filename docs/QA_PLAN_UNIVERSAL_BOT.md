@@ -10,7 +10,7 @@
 
 **GO condicionado para criar stories da Fase 0**, desde que sejam stories de decisão e preparação de QA. Antes das stories que alteram schema ou runtime, PO e Architect precisam fechar os bloqueios de escopo, migração, permissões, lifecycle, reconciliação e segurança.
 
-O principal motivo do NO-GO é de testabilidade: os testes atuais cobrem somente utilitários locais em [tests/security.test.ts](../tests/security.test.ts) e [tests/squadManager.test.ts](../tests/squadManager.test.ts). Não há harness de Discord, banco de teste, testes transacionais/concorrentes, integração de deploy ou teste real de isolamento entre guilds.
+O principal motivo do NO-GO continua sendo testabilidade incompleta. Existe agora um harness PostgreSQL efêmero (`npm run test:integration`) que aplica migrations sobre um schema legado sintético e executa testes de integridade multi-guild. Ainda faltam adapter Discord com falhas injetáveis, clock controlado, testes de concorrência de aplicação, integração de deploy, CI/secret scanning e o fechamento das stories de decisão.
 
 ## 2. Cobertura das issues #1-#8
 

@@ -23,8 +23,8 @@ A aplicação não deve ser considerada pronta para um ambiente hostil sem corri
 | SEC-006 | Corrigido                  | Rate limit é por processo; múltiplas réplicas exigem limitador compartilhado.                                                                                                                                                                   |
 | SEC-007 | Parcial                    | Compose exige credenciais externas e rede interna; `deploy.sh` faz bootstrap temporário das variáveis ausentes a partir da URL interna, sem defaults de senha. VPS, firewall, backups e permissões do host não foram auditados.                 |
 | SEC-008 | Corrigido no Dockerfile    | Filesystem somente leitura e capabilities mínimas ainda dependem da política de deploy.                                                                                                                                                         |
-| SEC-009 | Exceção documentada        | `npm audit --omit=dev` e `npm audit` reportam 3 high em `deepmerge-ts@7.1.5`, transitivo de `@prisma/config@6.19.3`/`prisma@6.19.3`; o pacote corrigido é 8.x, mas não há atualização compatível na linha Prisma 6 que altere essa dependência. |
-| SEC-010 | Parcial                    | Há testes de utilitários e scripts de qualidade; testes de integração Discord/concorrência exigem harness e banco de teste.                                                                                                                     |
+| SEC-009 | Aberto — aceite temporário até 2026-10-27 | HIGH: `npm audit --omit=dev` e `npm audit` reportam 3 findings em `deepmerge-ts@7.1.5`, transitivo de `@prisma/config@6.19.3`/`prisma@6.19.3`. Aceite do proprietário em 2026-09-27; responsável: proprietário do projeto. Finding permanece aberto e não corrigido. |
+| SEC-010 | Parcial                    | Harness PostgreSQL efêmero e testes de integridade multi-guild/migrations foram adicionados (17 testes passam); adapter Discord com falhas, concorrência da aplicação e CI/secret scanning ainda faltam. |
 | SEC-011 | Parcial                    | Novos jogos/squads são escopados por guild; perfis e dados legados ainda usam IDs Discord globais.                                                                                                                                              |
 | SEC-012 | Corrigido                  | Requer validação em guild real para confirmar permissões de desconexão.                                                                                                                                                                         |
 | SEC-013 | Corrigido                  | Anúncios `@everyone` foram desativados; limites de outros fluxos externos ainda merecem teste de integração.                                                                                                                                    |
@@ -90,7 +90,7 @@ A aplicação não deve ser considerada pronta para um ambiente hostil sem corri
 
 ### SEC-008 - Container executa como root e instala dependências de forma não reprodutível
 
-**Severidade:** Média
+**Severidade:** Alta (HIGH)
 **Evidência:** [Dockerfile](../Dockerfile) não define `USER` e usa `npm install --include=dev` em vez de instalação determinística de produção.
 **Impacto:** uma exploração no processo do bot ganha privilégios elevados no container; builds podem variar e incluem ferramentas desnecessárias.
 
@@ -98,11 +98,13 @@ A aplicação não deve ser considerada pronta para um ambiente hostil sem corri
 
 ### SEC-009 - Dependências reportam vulnerabilidades high
 
-**Severidade:** Média
-**Evidência:** em 2026-09-03, `npm audit --omit=dev` e `npm audit` reportaram 3 vulnerabilidades high em `deepmerge-ts@7.1.5`, pela cadeia `prisma@6.19.3` → `@prisma/config@6.19.3` → `deepmerge-ts@7.1.5`. O advisory é GHSA-ggr8-5vv4-36mx (stack exhaustion em grafos recursivos); `deepmerge-ts@8.0.2` é corrigido, mas `@prisma/config@6.19.3` fixa 7.1.5 e a atualização Prisma 6 compatível disponível não remove a cadeia.
-**Impacto:** a dependência está no tooling do Prisma e não é importada pelo runtime compilado do bot; a exploração depende de entrada recursiva alcançar o merge do CLI/configuração. O risco residual permanece em desenvolvimento/build, e não foi usado `npm audit fix` cego nem override incompatível.
+**Severidade:** Alta (HIGH)
+**Evidência:** revalidado em 2026-09-27: `npm audit --omit=dev` e `npm audit` reportam 3 registros HIGH em `deepmerge-ts@7.1.5`, pela cadeia `prisma@6.19.3` → `@prisma/config@6.19.3` → `deepmerge-ts@7.1.5`. O advisory é GHSA-ggr8-5vv4-36mx (stack exhaustion em grafos recursivos); `deepmerge-ts@8.0.2` é corrigido, mas `@prisma/config@6.19.3` fixa 7.1.5 e não foi encontrada atualização oficial compatível na linha Prisma 6 que remova essa cadeia.
+**Escopo observado:** `npm audit --omit=dev` também retorna o finding. A árvore constatada passa por Prisma tooling; exposição em runtime não foi confirmada. Não se afirma que a dependência está ativa no runtime compilado do bot. O advisory permanece aberto e não corrigido.
 
-**Exceção:** manter Prisma 6.19.3 até existir release compatível que atualize `deepmerge-ts`, acompanhar o advisory e reavaliar antes do próximo upgrade major. O audit completo deve continuar no CI.
+**Triagem @devops (2026-09-27):** não foi encontrada release oficial compatível na linha Prisma 6 que atualize `deepmerge-ts`; override transitivo não tem compatibilidade garantida e `npm audit fix` pode exigir upgrade major. O proprietário aprovou aceite temporário em 2026-09-27, registrado na [Decisão Humana 005](human_decisions/DONE/decisao-005-aceite-de-risco-sec-009-prisma-deepmerge-ts-v1.0.0.md). Responsável: proprietário do projeto. Reavaliar até 2026-10-27 ou assim que surgir release oficial compatível. Como controle operacional futuro, restringir a execução de Prisma CLI/configuração a entradas confiáveis; implantação desse controle ainda não foi verificada. O aceite não corrige nem fecha o finding.
+
+**Status CI (2026-09-27):** GitHub Actions foi configurado em `.github/workflows/ci.yml` pela Story 0.6; esta auditoria não declara execução hospedada. O workflow mantém os três registros HIGH/OPEN visíveis e aplica somente o waiver temporário autorizado. O audit não é considerado limpo nem SEC-009 corrigido.
 
 ### SEC-010 - Ausência de testes de segurança, rate limits e validação centralizada
 

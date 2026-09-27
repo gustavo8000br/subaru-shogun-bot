@@ -399,15 +399,6 @@ Isto **supersede** a recomendação de `ARCHITECTURE_UNIVERSAL_BOT.md` §4 ("sec
 
 ---
 
-## Decisões que permanecem com o PO / usuário
+## Decisões humanas e pendências do proprietário
 
-Nenhuma delas bloqueia o início da Fase 1 na ordem acordada, mas todas precisam de resposta antes das stories indicadas.
-
-| # | Decisão | Bloqueia |
-| --- | --- | --- |
-| 1 | Retenção de squads em `closed` e do audit trail antes do expurgo | Story 0.1 / 0.4 |
-| 2 | Staff enxerga canais de squad por padrão? (recomendação do Architect: **não**) | Story 0.3 / 1.4 |
-| 3 | Staff pode conectar na voz de uma squad da qual não é membro? | Story 0.3 / 1.4 |
-| 4 | Conjunto final de capabilities nomeadas de staff (`manage_setup`, `manage_any_squad`, `view_audit`, …) | Story 0.3 |
-| 5 | `AuditLog.actorId`: remover a FK e desnormalizar, preservando auditoria após expurgo de perfil? | Gap 3 / Story 0.4 |
-| 6 | Retenção do backup legado e critério formal de cutover da SubaruShogun | Story 0.4 |
+As decisões humanas são mantidas em [`docs/human_decisions/README.md`](human_decisions/README.md). As decisões 001–004 foram aprovadas: 001 aprova a política geral de sobrevivência da auditoria, mas deixa prazos numéricos de retenção pendentes; 002 aprova acesso opt-in da staff a texto e voz dentro da mesma guild; 003 aprova capabilities nomeadas por cargo/guild; 004 aprova cutover após ensaio completo em cópia e aceite, com reset total e fallback compactado por sete dias. A execução permanece condicionada às evidências e ao checklist operacional descritos na Decisão 004.

@@ -18,6 +18,7 @@ Este arquivo define as instrucoes do projeto para o Codex CLI.
 - Rode `npm run typecheck`
 - Rode `npm test`
 - Atualize checklist e file list da story antes de concluir
+- O CI oficial deste projeto é GitHub Actions em `.github/workflows/ci.yml`; não configure nem execute serviços externos de revisão automatizada. Use os checks do workflow e as revisões AIOX (@qa/@architect).
 <!-- AIOX-MANAGED-END: quality -->
 
 <!-- AIOX-MANAGED-START: codebase -->
