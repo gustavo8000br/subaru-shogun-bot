@@ -48,6 +48,10 @@ jobs:
         run: npm run build
 
       - name: Prisma schema validation
+        env:
+          # Prisma requires a datasource value during validation; this URI is
+          # deliberately unreachable and validation does not open a connection.
+          DATABASE_URL: postgresql://schema_validation:local_only@127.0.0.1:1/schema_validation?schema=public
         run: npx prisma validate
 
       - name: Production dependency audit (raw JSON retained in logs)
