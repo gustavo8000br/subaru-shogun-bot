@@ -47,13 +47,17 @@ Decisões rejeitadas ou substituídas permanecem registradas para auditoria.
 
 | Decisão | Tema | Bloqueia principalmente | Estado |
 | --- | --- | --- | --- |
-| [001](./DONE/decisao-001-retencao-expurgo-e-auditoria-v1.0.0.md) | Retenção e sobrevivência da auditoria | Stories 0.1 e 0.4; validação das FKs | APROVADA* |
+| [001](./DONE/decisao-001-retencao-expurgo-e-auditoria-v1.1.0.md) | Retenção de 90 dias para squads encerradas e 365 dias para auditoria | Stories 0.1 e 0.4; validação das FKs | APROVADA |
 | [002](./DONE/decisao-002-acesso-da-staff-a-canais-de-squad-v1.0.0.md) | Acesso opt-in da staff a texto/voz na própria guild | Story 1.4 | APROVADA |
 | [003](./DONE/decisao-003-capabilities-da-staff-v1.0.0.md) | Capabilities nomeadas por cargo e guild | Stories 0.3 e 1.4 | APROVADA |
 | [004](./DONE/decisao-004-cutover-e-retencao-do-legado-v1.0.0.md) | Cutover após ensaio em cópia; reset total e fallback compactado por sete dias | Story 0.4; operação de cutover | APROVADA* |
 | [005](./DONE/decisao-005-aceite-de-risco-sec-009-prisma-deepmerge-ts-v1.0.0.md) | Aceite temporário do risco HIGH SEC-009 até reavaliação em 2026-10-27 | Tratamento operacional e reavaliação SEC-009 | APROVADA — temporária |
+| [006](./DONE/decisao-006-ciclo-de-vida-do-perfil-v1.0.0.md) | Ciclo de vida do perfil, preferências e remoção de dados | Stories 0.1, 0.4 e 1.4 | APROVADA |
+| [007](./DONE/decisao-007-retencao-de-dados-relacionados-a-squad-v1.0.0.md) | Retenção de dados relacionados a squads, sessões de voz e eventos agendados | Stories 0.1, 0.4 e 1.3 | APROVADA |
+| [008](./DONE/decisao-008-reset-configuracao-com-squads-ativas-v1.0.0.md) | Efeito de `/config reset` com squads ativas ou reconciliação pendente | Story 0.2; implementação de reset | APROVADA |
+| [009](./DONE/decisao-009-contagem-pending-reconciliation-v1.0.0.md) | `pending_reconciliation` reserva vaga no limite até reconciliar | Story 1.1 | APROVADA |
 
-* A recomendação da Decisão 001 foi aprovada, mas os prazos numéricos de retenção permanecem pendentes e bloqueiam a implementação de expurgo automático.
+* A Decisão 001 v1.0.0 permanece como histórico; o aditamento v1.1.0 registra os prazos aprovados. ADR-007 e o follow-up de @architect na Story 0.1 definem timestamp/mecânica, aguardando QA/PO antes de implementar expurgo automático.
 
 * A Decisão 004 aprova a estratégia e as condições; reset/deploy continuam condicionados a ensaio, restauração e checklist operacional com evidências revisáveis.
 

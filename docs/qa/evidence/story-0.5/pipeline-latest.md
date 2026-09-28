@@ -1,6 +1,6 @@
 # Story 0.5 — pipeline local
 
-Generated: 2026-09-27T23:35:56Z
+Generated: 2026-09-28T03:34:15Z
 
 This report contains gate status only; command output was shown in the run and temporary logs were removed. No CI execution is inferred from local results.
 
@@ -16,11 +16,11 @@ This report contains gate status only; command output was shown in the run and t
 | Prisma validate | PASS |
 | Dependency audit (production; SEC-009 temporary waiver) | WAIVED (3 HIGH/OPEN findings; expires 2026-10-27) |
 | Dependency audit (full; SEC-009 temporary waiver) | WAIVED (3 HIGH/OPEN findings; expires 2026-10-27) |
-| Secret scan | BLOCKED |
+| Secret scan (gitleaks, redacted) | PASS |
 | CI configuration inventory | CONFIGURED (not executed locally; hosted run pending) |
 
 Unit test summary: ℹ tests 24;ℹ pass 23;ℹ fail 0;ℹ skipped 1;
-Integration summary: ℹ tests 30;ℹ pass 30;ℹ fail 0;ℹ skipped 0;
+Integration summary: ℹ tests 33;ℹ pass 33;ℹ fail 0;ℹ skipped 0;
 
 GitHub Actions: GitHub Actions configured (ci.yml); not executed locally; hosted run pending.
 SEC-009: HIGH, OPEN, WAIVED temporarily through 2026-10-27 inclusive; production: SEC-009 WAIVED: 3 HIGH findings, OPEN, advisory GHSA-ggr8-5vv4-36mx; prisma@6.19.3 -> @prisma/config@6.19.3 -> deepmerge-ts@7.1.5; accepted through 2026-10-27 inclusive. npm audit production exit 1 is retained as raw evidence.;full: SEC-009 WAIVED: 3 HIGH findings, OPEN, advisory GHSA-ggr8-5vv4-36mx; prisma@6.19.3 -> @prisma/config@6.19.3 -> deepmerge-ts@7.1.5; accepted through 2026-10-27 inclusive. npm audit full exit 1 is retained as raw evidence.;

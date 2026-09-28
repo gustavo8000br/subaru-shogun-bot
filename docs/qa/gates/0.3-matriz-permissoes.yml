@@ -1,0 +1,56 @@
+schema: 1
+story: '0.3'
+story_title: 'Aprovar a matriz de permissões por ação'
+gate: PASS
+status_reason: 'Reavaliação documental consultiva após Architect 1.0.3: 9.0/10 (90/100), acima do threshold 8.5. Cenários TDD planejados agora cobrem bits privilegiados, evento de auditoria de cada uso do bootstrap e transição para staff configurada. Recomenda @po como próximo agente serial. Story permanece Draft até validação AIOX PO; SEC-002/012 continuam abertos até implementação/evidência.'
+reviewer: 'Quinn (Test Architect) — prontidão documental após Architect 1.0.3; sem testes executados'
+reviewed_revision: 'Story 0.3 v1.0.3, ADR-003, Decisões Humanas 002/003, QA Plan risco SEC-002/012'
+updated: '2026-09-28T01:35:00Z'
+top_issues:
+  - id: 'STORY-003-SEC-002-OVERWRITE-DENY-ASSERTIONS'
+    severity: high
+    status: resolved
+    finding: 'Finding da revisão 8.2: cenários de negação dos bits proibidos ausentes do plano TDD.'
+    suggested_action: 'Resolvido em Architect 1.0.3 com assertiva allowMask/forbiddenMask cobrindo todos os bits em criação/reconciliação e overwrite sem resíduo após drift.'
+    suggested_owner: architect
+  - id: 'STORY-003-SEC-012-BOOTSTRAP-AUDIT-EVENT'
+    severity: high
+    status: resolved
+    finding: 'Finding da revisão 8.2: plano sem asserção do evento auditável do fallback bootstrap.'
+    suggested_action: 'Resolvido em Architect 1.0.3 com teste de exatamente um evento por chamada de fallback e testes da transição para staff configurada.'
+    suggested_owner: architect
+  - id: 'STORY-003-TDD-NOT-RUN'
+    severity: low
+    status: accepted
+    finding: 'Nenhum teste foi criado ou executado; esta é avaliação documental de prontidão e a story não implementa runtime.'
+    suggested_action: 'Manter TDD para as stories de implementação e não declarar SEC-002/012 mitigados até evidência de execução.'
+    suggested_owner: qa
+waiver:
+  active: false
+quality_score: 90
+evidence:
+  tests_reviewed: 0
+  risks_identified: 2
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7]
+    ac_gaps: []
+nfr_validation:
+  security:
+    status: CONCERNS
+    notes: 'Contrato de menor privilégio especificado; plano futuro adiciona asserts para negar todos os bits proibidos, registrar uso do fallback e retirar a autorização após configuração de staff. SEC-002/012 permanecem abertos até execução na implementação.'
+  performance:
+    status: PASS
+    notes: 'Sem implementação nesta story; cobertura de performance não é requisito do contrato documental revisado.'
+  reliability:
+    status: CONCERNS
+    notes: 'Revalidação de capability/estado, expiração, replay, evento de auditoria de fallback e transição para staff estão planejados; não executados nesta story documental.'
+  maintainability:
+    status: CONCERNS
+    notes: 'ACs, ADR-003, decisões humanas e cenários TDD assertivos têm rastreabilidade; readiness documental apta ao handoff PO final.'
+recommendations:
+  immediate:
+    - action: 'Próximo agente serial: @po realizar validação AIOX final. Manter Draft até validação formal; não interpretar o QA GO documental como evidência de mitigação runtime.'
+      refs: ['docs/stories/0.3-matriz-permissoes.story.md', 'docs/ARCHITECTURE_DECISIONS.md#adr-003--matriz-de-permissões-dos-canais-de-squad']
+  future:
+    - action: 'Nas stories de implementação, executar RED/GREEN para SEC-002/012 em handlers e adapter Discord, incluindo cargo removido, cross-guild, expiração, replay, permissões efetivas do bot e encerramento do fallback.'
+      refs: ['docs/QA_PLAN_UNIVERSAL_BOT.md', 'docs/stories/0.3-matriz-permissoes.story.md']

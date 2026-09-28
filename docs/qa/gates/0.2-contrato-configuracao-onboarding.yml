@@ -1,0 +1,56 @@
+schema: 1
+story: '0.2'
+story_title: 'Fechar o contrato de configuração e onboarding'
+gate: PASS
+status_reason: 'Reavaliação documental após Architect 1.0.3: 9.0/10 (90/100), acima do threshold 8.5. Cenários TDD-10–13 cobrem negativas manage_setup, revogação antes da confirmação, bootstrap auditável/desativado após staff e consultas view_audit sem leak com isolamento guild-scoped. D008 reset bloqueado/seguro está coberto. Recomendar @po como próximo agente serial; Story permanece Draft até validação AIOX. Nenhum teste executado; riscos não comprovados até implementação.'
+reviewer: 'Quinn (Test Architect) — prontidão documental após Architect 1.0.3; sem execução de testes'
+reviewed_revision: 'Story 0.2 após PO refinement, D008 Opção A, Architect 1.0.3/TDD-10–13, ADR-002/003/004/005/006, QA Plan'
+updated: '2026-09-28T01:55:00Z'
+top_issues:
+  - id: 'STORY-002-AUTHZ-TDD-COVERAGE'
+    severity: high
+    status: resolved
+    finding: 'Finding da revisão 8.2: cobertura TDD insuficiente para ações de configuração e consultas protegidas.'
+    suggested_action: 'Resolvido em TDD-0.2-10–13: nega setup/edit/reset sem manage_setup, revalida capability antes da confirmação, cobre bootstrap auditável e consulta view_audit sem leitura/leak com tenant scope.'
+    suggested_owner: architect
+  - id: 'STORY-002-D008-RESET-GUARD'
+    severity: low
+    status: accepted
+    finding: 'D008 Opção A exige bloqueio enquanto houver squad ativa ou reconciliação pendente.'
+    suggested_action: 'TDD-09a/09b cobre bloqueio sem mutação e reset seguro confirmado preservando squads/canais; implementar e executar nas stories próprias, sem inferir limpeza externa.'
+    suggested_owner: qa
+  - id: 'STORY-002-TDD-NOT-RUN'
+    severity: low
+    status: accepted
+    finding: 'Cenários desta story são planejamento TDD futuro; nenhum teste foi criado ou executado nesta avaliação documental.'
+    suggested_action: 'Exigir RED/GREEN nas stories de implementação; não tratar SEC-002/012 ou os contratos como comprovados antes de evidência.'
+    suggested_owner: qa
+waiver:
+  active: false
+quality_score: 90
+evidence:
+  tests_reviewed: 0
+  risks_identified: 2
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8]
+    ac_gaps: []
+nfr_validation:
+  security:
+    status: CONCERNS
+    notes: 'Plano TDD futuro cobre negação por manage_setup, revogação na confirmação, fallback bootstrap auditável e consulta view_audit sem leitura não autorizada e com guild scope; SEC-002/012 permanecem abertos até execução.'
+  performance:
+    status: PASS
+    notes: 'Sem implementação a avaliar; requisitos de experiência e configuração estão delimitados nesta story documental.'
+  reliability:
+    status: CONCERNS
+    notes: 'Estados e recuperação explícita estão especificados; D008 cobre reset bloqueado/seguro, mas os testes futuros ainda não foram executados.'
+  maintainability:
+    status: CONCERNS
+    notes: 'ADRs, decisões e contratos têm rastreabilidade; catálogo TDD futuro cobre ações/capabilities e D008 antes da implementação.'
+recommendations:
+  immediate:
+    - action: 'Próximo agente serial @po: executar validação AIOX final e manter Draft até registrar resultado do workflow.'
+      refs: ['docs/stories/0.2-contrato-configuracao-onboarding.story.md']
+  future:
+    - action: 'Em stories Ready de implementação, executar TDD para isolamento, autorização em cada handler, confirmação/auditoria, ownership/retry e reset D008 seguro.'
+      refs: ['docs/QA_PLAN_UNIVERSAL_BOT.md', 'docs/ARCHITECTURE_DECISIONS.md#adr-002--reconciliação-discord--postgresql']

@@ -1,6 +1,6 @@
 # Story 0.5 — catálogo finito e evidência
 
-Gerado: 2026-09-27T23:36:25Z. Resultados locais não equivalem a ensaio operacional nem a aprovação de QA/Architect.
+Gerado: 2026-09-28T03:34:46Z. Resultados locais não equivalem a ensaio operacional nem a aprovação de QA/Architect.
 
 | ID | Tipo | Pré-condição, ação e resultado esperado | Resultado e evidência |
 |---|---|---|---|

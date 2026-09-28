@@ -1,0 +1,85 @@
+schema: 1
+story: '1.2'
+story_title: 'Manter Discord e PostgreSQL reconciliáveis'
+gate: CONCERNS
+status_reason: 'Revisão pós-implementação: qualidade da fatia parcial avaliada em 7.2/10 (72/100), abaixo de 8.5, por oracle de commit insuficiente, ausência de testes de falha/incremental persistence e problemas de audit/PII. Story completa em NO-GO: a maioria dos ACs segue sem implementação, incluindo operação/outbox, retry, fetch/grace/dupla observação e encerramento seguro. Manter Ready e ACs desmarcados; não marcar Done. Nenhum teste foi executado por QA; resultados do Dev Record não foram revalidados nem há CI hosted deste diff.'
+reviewer: 'Quinn (Test Architect) — revisão estática da implementação parcial; testes não executados'
+reviewed_revision: 'diff local src/squadManager.ts e tests/postgres-integrity.test.ts, Dev Agent Record, Architect findings pós-implementação e Story 1.2 Ready'
+updated: '2026-09-28T03:05:00Z'
+review_scope_score: 72
+whole_story_gate: 'NO-GO — não pontuada como concluída; ACs incompletos'
+top_issues:
+  - id: 'STORY-1.2-D009-ADR001-ALIGNMENT'
+    severity: high
+    status: resolved
+    finding: 'Finding anterior 8.3: ADR-001 não refletia D009 e a fronteira de ownership 1.1/1.2 precisava confirmação pós-decisão.'
+    suggested_action: 'Resolvido pelo Architect pós-D009 em ADR-001 e Story 1.1 v1.0.6/1.2 v1.0.4: contagem inclui pending_reconciliation; 1.1 reserva em T1, 1.2 persiste transição de reconciliação que permitirá recontagem posterior.'
+    suggested_owner: architect
+  - id: 'STORY-1.2-COMMIT-OBSERVER'
+    severity: high
+    status: open
+    finding: 'TDD-1.2-01 baixa transactionOpen no finally do callback; isso ocorre antes da Promise externa de $transaction resolver e não prova que P2 só inicia após commit.'
+    suggested_action: 'Corrigir observer para sinalizar committed apenas após await da Promise de $transaction resolver; manter também asserções da persistência de cada ID antes da próxima chamada Discord.'
+    suggested_owner: dev
+  - id: 'STORY-1.2-PARTIAL-FAILURE-EVIDENCE'
+    severity: high
+    status: open
+    finding: 'TDD reporta caminho feliz T1/P2/T3 mas não cobre falha de criação/persistência de texto/anúncio nem prova incremental durability/estado recuperável.'
+    suggested_action: 'Adicionar ciclo Red→Green→Refactor com failure injection em cada limite e asserts do ID/status persistido, retry e efeitos já executados sem duplicação.'
+    suggested_owner: dev
+  - id: 'STORY-1.2-AUDIT-PII-ERROR-HANDLING'
+    severity: high
+    status: open
+    finding: 'Audit de canal não verificado grava channelName potencialmente identificável; erros de audit são engolidos; update de status e audit são gravações separadas.'
+    suggested_action: 'Definir allowlist minimizada, remover dados incidentais/PII e tornar transição/audit atômicas ou outbox-backed; falha deve ser observável e coberta por teste.'
+    suggested_owner: architect
+  - id: 'STORY-1.2-LEGACY-DELETE-AND-RECONCILER'
+    severity: critical
+    status: open
+    finding: 'deleteSquadRecord ainda apaga canais/Squad fisicamente com base em cache/IDs e ignora falhas; restoreExistingSquads não faz fetch/grace/duas observações e periódico não reprocessa pending.'
+    suggested_action: 'Decompor em stories de reconciliador com fetch/ownership/duas confirmações/periodicidade e lifecycle closing→closed não destrutivo; cobrir os caminhos legados de cleanup antes de aceitar ACs.'
+    suggested_owner: architect
+  - id: 'STORY-1.2-OUTBOX-REQUESTID-MISSING'
+    severity: critical
+    status: open
+    finding: 'Schema e fluxo não possuem ProvisioningOperation/outbox/requestId durável; retry/restart e ownership por operação estão ausentes.'
+    suggested_action: 'Criar epic/stories técnicas dependentes para persistência de operação, ownership e retry idempotente; não substituir com estado em memória nem reduzir ACs.'
+    suggested_owner: sm
+  - id: 'STORY-1.2-TDD-REAL-EVIDENCE-FUTURE'
+    severity: low
+    status: accepted
+    finding: 'Fake Discord, clock controlado e PostgreSQL efêmero existem, mas a evidência factual declara que não estão ligados ao fluxo real T1/P2/T3/retry/reconciler; nenhum teste foi executado nesta revisão.'
+    suggested_action: 'Exigir TDD Red→Green→Refactor e evidência de fluxo real PostgreSQL/GitHub Actions durante implementação; não classificar utilitários/testes antigos como TDD retroativamente.'
+    suggested_owner: dev
+waiver:
+  active: false
+quality_score: 72
+evidence:
+  tests_reviewed: 3
+  tests_executed_by_qa: 0
+  dev_reported_integration_runs: '31/32/33 pass em ciclos sucessivos; não verificados independentemente; nenhum run hosted para este diff'
+  risks_identified: 7
+  trace:
+    partial_implemented_behaviors: ['T1 SQL separado de P2 em código; observer de teste não prova commit', 'persistência de IDs sequencial no caminho feliz, sem fault test', 'não apagar canal candidato desconhecido por aparência', 'cache miss mantém status pending_reconciliation']
+    ac_covered: []
+    ac_gaps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+nfr_validation:
+  security:
+    status: CONCERNS
+    notes: 'Ownership fail-closed, isolamento e não deleção desconhecida estão especificados; a integração real do adapter Discord permanece futura e SEC-010/011 não estão mitigados.'
+  performance:
+    status: CONCERNS
+    notes: 'Retries concorrentes e liberação de lock antes de P2 têm cenários; sem execução ou medição de runtime.'
+  reliability:
+    status: CONCERNS
+    notes: 'Falhas incrementais, restart, fetch/grace, dupla ausência e encerramento repetível têm TDD planejado; fluxo de serviço ainda sem evidência executada.'
+  maintainability:
+    status: CONCERNS
+    notes: 'Lei TDD completa e ownership entre 1.1/1.2 confirmados após alinhamento de ADR-001 à D009 aprovada.'
+recommendations:
+  immediate:
+    - action: 'Não encerrar a Story. Corrigir primeiro o observer commit e a auditoria/PII da fatia; fazer @pm criar epics e @sm decompor dependências duráveis de outbox/retry, reconciliador/fetch/close e integração D009 antes de nova revisão QA.'
+      refs: ['docs/stories/1.2-reconciliacao-discord-postgresql.story.md', 'docs/ARCHITECTURE_DECISIONS.md#adr-002--reconciliação-discord-postgresql']
+  future:
+    - action: 'Na implementação, seguir Red→Green→Refactor em cada incremento; integrar fake/failure injection e clock ao serviço real usando PostgreSQL efêmero e registrar evidência CI, cleanup e comportamento T1/P2/T3.'
+      refs: ['docs/QA_PLAN_UNIVERSAL_BOT.md#lei-do-projeto-tdd-red--green--refactor', 'docs/stories/1.2-reconciliacao-discord-postgresql.story.md']

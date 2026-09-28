@@ -1,8 +1,18 @@
 # Plano de QA do Bot Discord Universal
 
-**Data:** 2026-09-03  
+**Snapshot histórico:** 2026-09-03 (estado da revisão original; itens de CI/clock não representam o estado atual).
 **Escopo:** validação dos documentos de direção, arquitetura, auditoria de segurança, handoff de remediação e testes atuais.  
 **Modo:** somente leitura para a revisão; este documento não autoriza alteração de código, schema, deploy ou commit.
+
+## Lei do projeto: TDD Red → Green → Refactor
+
+Toda nova implementação ou correção de produção deve obedecer, em cada incremento pequeno, à sequência abaixo:
+
+1. **Red:** criar e executar primeiro o teste do comportamento ausente/incorreto; confirmar falha funcional esperada e descartar falha de setup/harness.
+2. **Green:** implementar o mínimo necessário e executar o teste direcionado para confirmar aprovação.
+3. **Refactor:** melhorar a estrutura mantendo comportamento e executar novamente os testes relevantes.
+
+É proibido alterar produção antes de um Red válido. Se ambiente ou dependência impedir uma fase, registrar evidência e bloqueio na story e não declarar implementação pronta. O histórico do projeto começou sem TDD; testes e entregas anteriores permanecem históricos e não devem receber classificação TDD retroativa. Esta regra vale para todas as stories de implementação futuras, inclusive quando seus planos TDD originais tenham sido escritos antes desta regra.
 
 ## 1. Veredito
 
@@ -10,7 +20,9 @@
 
 **GO condicionado para criar stories da Fase 0**, desde que sejam stories de decisão e preparação de QA. Antes das stories que alteram schema ou runtime, PO e Architect precisam fechar os bloqueios de escopo, migração, permissões, lifecycle, reconciliação e segurança.
 
-O principal motivo do NO-GO continua sendo testabilidade incompleta. Existe agora um harness PostgreSQL efêmero (`npm run test:integration`) que aplica migrations sobre um schema legado sintético e executa testes de integridade multi-guild. Ainda faltam adapter Discord com falhas injetáveis, clock controlado, testes de concorrência de aplicação, integração de deploy, CI/secret scanning e o fechamento das stories de decisão.
+O `clientSecret` Twitch é uma credencial de configuração específica da guild e permanece cifrado no PostgreSQL conforme ADR-006; `SECRETS_MASTER_KEY`, token do bot e credenciais operacionais compartilhadas são runtime-only.
+
+O principal motivo do NO-GO continua sendo testabilidade incompleta. Existe harness PostgreSQL efêmero (`npm run test:integration`) para integridade multi-guild. O baseline CI GitHub Actions da Story 0.6 está configurado e teve run hospedado verde; isso valida apenas os steps definidos no workflow, não lifecycle de domínio, clock controlado, concorrência da aplicação, adapter Discord fake/falhas injetáveis, deploy ou secret scanning. O clock controlado e adapter fake seguem como infraestrutura/cobertura pendente. Os cenários TDD abaixo são planejamento histórico, não resultados executados.
 
 ## 2. Cobertura das issues #1-#8
 
@@ -52,6 +64,26 @@ Escala: probabilidade e impacto de 1 a 5; exposição = produto. Riscos com expo
 - A instalação, configuração, jogo, squad, sessão, evento, perfil local, rank, saldo, inventário, reputação, permissões e auditoria têm escopo explícito aprovado pelo PO/Architect.
 - Em um cenário com Guild A e Guild B, valores iguais de `discordUserId` não compartilham saldo, inventário, rank, reputação, sessões, elegibilidade ou consultas de leaderboard.
 - Uma consulta sem filtro de guild para entidade tenantizada falha em revisão estática/teste de contrato; nomes de canal e cache nunca são usados como tenant ou autorização.
+
+### Retenção, expurgo e auditoria — Decisão Humana 001 v1.1.0
+
+**Estado atual:** `tests/postgres-integrity.test.ts` já verifica perfis separados para o mesmo Discord ID, mutação A sem efeito em B, e escrita/lookup positivo de auditoria por `actorId`. O último caso demonstra a FK atual e **não** prova sobrevivência da auditoria ao expurgo. O teste de migration acrescenta `guildId` a tabelas legadas, mas não valida mapeamento misto de Discord IDs/profile IDs. O schema atual não contém `Squad.closedAt` nem `ProvisioningOperation`; `AuditLog.actorId` é opcional e mantém relação a `UserProfile`. Não existem testes de prazos, privacy deletion, referential isolation cruzado ou validação fail-closed de órfãos legados.
+
+**Testes TDD requeridos nas stories de implementação após o contrato 0.1 ser aprovado:**
+
+- Com relógio fixo do PostgreSQL: closed squad permanece em `closedAt + 90d - 1ms`; no limite de `+90d` fica elegível; nada com estado não terminal, `closedAt` nulo ou `orphan_pending` entra na seleção.
+- Backfill de estado `closed` legado usa um único instante UTC da migração e mantém a linha por 90 dias adicionais; `ProvisioningOperation` não terminal e órfão externo não são eliminados pelo job.
+- Audit event sobrevive ao expurgo da squad e perfil, sem cascade; permanece até `createdAt + 365d - 1ms` e fica elegível em `+365d`, por `createdAt` próprio e independente do encerramento da squad.
+- Remoção/desinstalação da guild não apaga audit antes da retenção; operação de fechar squad persiste `closedAt`, estado/motivo e evento de auditoria atomicamente, reverte tudo em falha, e `closedAt` permanece imutável em retry/transição repetida.
+- Depois de remover o perfil, o audit conserva `guildId` e `actorRef` opaco, sem FK/ID Discord/nome/campo pessoal em `target`/`details`; mesma pessoa não é correlacionada entre A/B e query de A nunca vê B.
+- Migração de cada coluna de identidade legada verifica a origem e converte `(guildId, discordId)` ao profile ID local; duplicata, ausência ou guild mismatch impede validação e preserva o dado-fonte.
+- Constraints compostas rejeitam membro/proprietário/participante apontando para `profileId` de outra guild; mesmo Discord ID em A e B resolve perfis independentes.
+- Decisão Humana 007 aprova expurgo após 90 dias de `closedAt` de `VoiceSession` histórica e `ScheduledSquad`/attendees relacionados à squad. TDD futuro deve provar associação correta, fronteira temporal, ausência de remoção antes do limite e preservação independente de AuditLog por 365 dias. Não se alega que esses testes existem ou foram executados; decisão não autoriza job/cascade sem story própria.
+- Decisão Humana 006 aprova DM amigável com seleção ao membro que sai; pedido de apagamento e remoção/desinstalação apagam perfil/preferências. Story de produto futura define UX, timeout/validade, DM indisponível e ausência de resposta. Não inferir timeout/fallback; TDD virá após esse contrato.
+
+O teste de fronteira deve receber `asOf` capturado uma vez do banco em produção e substituível por instante fixo nos testes. Estes são cenários planejados, não evidência de implementação/teste executado nesta fase.
+
+**Fronteira AIOX:** Story 0.1 entrega a classificação e o plano de testes, sem schema, migration, backfill, runtime ou expurgo. QA aqui pontua clareza/execução dos cenários; cada implementação subsequente precisa de story Ready própria e gates de dados.
 
 ### Setup e operação do núcleo
 
@@ -116,7 +148,7 @@ Escala: probabilidade e impacto de 1 a 5; exposição = produto. Riscos com expo
 
 - Ativação, pausa, reset e reconfiguração de Economia e Twitch em uma guild sem afetar outra.
 - Compra e reward concorrentes com saldo não negativo, ledger sem duplicata e request replay seguro.
-- Twitch com segredo apenas no runtime, falha externa isolada, rate limit por guild e mensagens sem menções abusivas.
+- Twitch `clientSecret` cifrado por guild no PostgreSQL (ADR-006); `SECRETS_MASTER_KEY` e segredos operacionais compartilhados ficam apenas no runtime. Testar mascaramento/ausência em logs e isolamento por guild; falha externa isolada, rate limit por guild e mensagens sem menções abusivas.
 
 **Gate:** desligar o módulo não quebra o core nem perde dados fora da política aprovada.
 
@@ -207,7 +239,7 @@ Bloquear criação de stories de implementação, promoção de fase ou distribu
 
 ## 11. Gaps e stories necessárias
 
-1. Criar story de decisões PO/Architect para fechar os itens 12.1/12.2 da direção e registrar defaults aprovados.
+1. @qa pontua Story 0.1 revisada para identidade, estados de provisioning, retenção/privacidade e TDD; @po valida readiness. Decisão Humana 001 v1.1.0 está aprovada e seus mecanismos estão propostos em ADR-007; não reabrir prazos.
 2. Criar story de ambiente QA com PostgreSQL isolado, fixtures de duas guilds, clock controlado, adapter Discord fake e falhas injetáveis.
 3. Criar story de contratos de `GuildContext`, capabilities, idempotência, lifecycle e estados de reconciliação antes do schema final.
 4. Criar story de cobertura de integração/concorrência; os quatro testes atuais não validam o risco principal.

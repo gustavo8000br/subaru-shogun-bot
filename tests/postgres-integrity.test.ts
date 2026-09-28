@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { PrismaClient } from "@prisma/client";
+import { ChannelType } from "discord.js";
 import { writeAudit } from "../src/commands/adminCommands.js";
-import { COUNTED_SQUAD_STATUSES } from "../src/squadManager.js";
+import { COUNTED_SQUAD_STATUSES, SquadManager } from "../src/squadManager.js";
 import { multiGuildFixture } from "./fixtures/multiguild.js";
 import { isEphemeralTestDatabaseUrl } from "./support/ephemeral-db-url.js";
+import { FakeDiscordAdapter } from "./support/fake-discord.js";
 
 const isolatedTestDatabase = process.env.AIOX_TEST_DATABASE === "ephemeral";
 const databaseUrl = isolatedTestDatabase ? process.env.DATABASE_URL : undefined;
@@ -15,6 +17,51 @@ if (!isolatedTestDatabase) {
   if (!databaseUrl) throw new Error("AIOX_TEST_DATABASE=ephemeral requires the disposable DATABASE_URL");
   if (!isEphemeralTestDatabaseUrl(databaseUrl)) throw new Error("Refusing integration tests: database URL is not the disposable test database");
   const prisma = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
+
+  const makeObservedDiscordGuild = (
+    guildId: string,
+    adapter: FakeDiscordAdapter,
+    isTransactionOpen: () => boolean,
+  ) => {
+    const category = {
+      id: process.env.SQUADS_CATEGORY_ID ?? `${guildId}-category`,
+      name: "⚔️ │ SQUADS TEMPORÁRIAS",
+      type: ChannelType.GuildCategory,
+    };
+    const channels = new Map([[category.id, category]]);
+    const guild = {
+      id: guildId,
+      roles: { everyone: { id: `${guildId}-everyone` } },
+      channels: {
+        cache: {
+          get: (id: string) => channels.get(id),
+          find: (predicate: (channel: (typeof category) & Record<string, unknown>) => boolean) =>
+            [...channels.values()].find((channel) => predicate(channel as (typeof category) & Record<string, unknown>)),
+        },
+        create: async (input: { name: string; type: ChannelType; parent?: string }) => {
+          const created = await adapter.create({
+            name: input.name,
+            ownershipMarker: "test-owned",
+            guildId,
+          });
+          const channel = {
+            id: created.id,
+            name: input.name,
+            type: input.type,
+            parentId: input.parent ?? null,
+            deletable: true,
+            members: { size: 0 },
+            delete: async () => adapter.delete(created.id),
+            send: async () => adapter.send(created.id, "test announcement"),
+            observedTransactionOpen: isTransactionOpen(),
+          };
+          channels.set(channel.id, channel);
+          return channel;
+        },
+      },
+    };
+    return guild;
+  };
 
   const prepareProductionIntegrityInvariants = async () => {
     // db push does not execute raw SQL from migrations; keep these production
@@ -422,6 +469,190 @@ if (!isolatedTestDatabase) {
       await prisma.squad.deleteMany({ where: { guildId } });
       await prisma.game.deleteMany({ where: { guildId } });
       await prisma.userProfile.deleteMany({ where: { guildId } });
+    }
+  });
+
+  test("commits squad reservation before issuing any Discord effect", async () => {
+    await requireDatabase();
+    const suffix = `story-1-2-${Date.now()}`;
+    const guildId = `${suffix}-guild`;
+    const ownerId = `${suffix}-owner`;
+    const discord = new FakeDiscordAdapter();
+    const transactionStates: boolean[] = [];
+    let transactionOpen = false;
+    const observedPrisma = new Proxy(prisma, {
+      get(target, property, receiver) {
+        if (property === "$transaction") {
+          return (callback: (transaction: unknown) => Promise<unknown>) =>
+            target.$transaction(async (transaction) => {
+              transactionOpen = true;
+              try {
+                return await callback(transaction);
+              } finally {
+                transactionOpen = false;
+              }
+            });
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    }) as PrismaClient;
+    const observedDiscord = new Proxy(discord, {
+      get(target, property, receiver) {
+        const value = Reflect.get(target, property, receiver);
+        if (typeof value !== "function") return value;
+        return (...args: unknown[]) => {
+          transactionStates.push(transactionOpen);
+          return value.apply(target, args);
+        };
+      },
+    });
+    const guild = makeObservedDiscordGuild(
+      guildId,
+      observedDiscord,
+      () => transactionOpen,
+    );
+    const client = { guilds: { cache: { get: () => guild } } };
+
+    try {
+      await prisma.userProfile.create({ data: { guildId, discordId: ownerId } });
+      await new SquadManager(client as never, observedPrisma).createManualSquad(
+        ownerId,
+        guild as never,
+        "TDD Boundary Game",
+      );
+
+      assert.ok(discord.calls.length > 0, "the scenario must exercise Discord effects");
+      assert.ok(
+        transactionStates.length >= 3 && transactionStates.every((open) => !open),
+        "all Discord effects must happen after the T1 transaction commits",
+      );
+      assert.equal(
+        await prisma.squad.count({ where: { guildId, status: "active" } }),
+        1,
+      );
+    } finally {
+      await prisma.squadMember.deleteMany({ where: { guildId } });
+      await prisma.squad.deleteMany({ where: { guildId } });
+      await prisma.game.deleteMany({ where: { guildId } });
+      await prisma.userProfile.deleteMany({ where: { guildId } });
+      await prisma.guildConfig.deleteMany({ where: { guildId } });
+    }
+  });
+
+  test("startup reconciliation never deletes a controlled-looking channel without ownership proof", async () => {
+    await requireDatabase();
+    const guildId = `story-1-2-ownership-${Date.now()}`;
+    let deleteCalls = 0;
+    const category = {
+      id: process.env.SQUADS_CATEGORY_ID ?? `${guildId}-category`,
+      name: "⚔️ │ SQUADS TEMPORÁRIAS",
+      type: ChannelType.GuildCategory,
+    };
+    const unknownChannel = {
+      id: `${guildId}-unknown-channel`,
+      name: "🔊 · Squad de jogador",
+      type: ChannelType.GuildVoice,
+      parentId: category.id,
+      deletable: true,
+      delete: async () => {
+        deleteCalls += 1;
+      },
+    };
+    const channels = new Map([
+      [category.id, category],
+      [unknownChannel.id, unknownChannel],
+    ]);
+    const cache = {
+      get: (id: string) => channels.get(id),
+      find: (predicate: (channel: any) => boolean) =>
+        [...channels.values()].find(predicate),
+      filter: (predicate: (channel: any) => boolean) =>
+        new Map([...channels.entries()].filter(([, channel]) => predicate(channel))),
+      values: () => channels.values(),
+    };
+    const guild = { id: guildId, channels: { cache } };
+    const client = {
+      guilds: { cache: { get: () => guild, values: () => [guild].values() } },
+    };
+    const manager = new SquadManager(client as never, prisma);
+
+    await (manager as any).restoreExistingSquads();
+
+    assert.equal(
+      deleteCalls,
+      0,
+      "a matching channel name and cache location do not prove bot ownership",
+    );
+    assert.equal(
+      await prisma.auditLog.count({
+        where: {
+          guildId,
+          targetId: unknownChannel.id,
+          eventType: "orphan_controlled_channel_unverified",
+        },
+      }),
+      1,
+      "unverified candidates must leave an audit trail for operator review",
+    );
+  });
+
+  test("startup cache misses retain the squad as pending reconciliation", async () => {
+    await requireDatabase();
+    const suffix = `story-1-2-cache-${Date.now()}`;
+    const guildId = `${suffix}-guild`;
+    const ownerId = `${suffix}-owner`;
+    const squadId = `${suffix}-squad`;
+    const categoryId = process.env.SQUADS_CATEGORY_ID ?? `${guildId}-category`;
+    const category = {
+      id: categoryId,
+      name: "⚔️ │ SQUADS TEMPORÁRIAS",
+      type: ChannelType.GuildCategory,
+    };
+    const channels = new Map([[category.id, category]]);
+    const cache = {
+      get: (id: string) => channels.get(id),
+      find: (predicate: (channel: any) => boolean) =>
+        [...channels.values()].find(predicate),
+      filter: (predicate: (channel: any) => boolean) =>
+        new Map([...channels.entries()].filter(([, channel]) => predicate(channel))),
+      values: () => channels.values(),
+    };
+    const guild = { id: guildId, channels: { cache } };
+    const client = {
+      guilds: { cache: { get: (id: string) => (id === guildId ? guild : undefined), values: () => [guild].values() } },
+    };
+
+    try {
+      await prisma.userProfile.create({ data: { guildId, discordId: ownerId } });
+      const game = await prisma.game.create({ data: { guildId, name: "Cache Game" } });
+      await prisma.squad.create({
+        data: {
+          id: squadId,
+          guildId,
+          gameId: game.id,
+          name: "Cache fixture",
+          ownerId,
+          voiceChannelId: `${suffix}-voice`,
+          textChannelId: `${suffix}-text`,
+          status: "active",
+        },
+      });
+
+      await (new SquadManager(client as never, prisma) as any).restoreExistingSquads();
+
+      const reconciled = await prisma.squad.findFirst({ where: { id: squadId, guildId } });
+      assert.equal(
+        reconciled?.status,
+        "pending_reconciliation",
+        "cache absence is not proof that Discord resources are absent",
+      );
+    } finally {
+      await prisma.auditLog.deleteMany({ where: { guildId } });
+      await prisma.squadMember.deleteMany({ where: { guildId } });
+      await prisma.squad.deleteMany({ where: { guildId } });
+      await prisma.game.deleteMany({ where: { guildId } });
+      await prisma.userProfile.deleteMany({ where: { guildId } });
+      await prisma.guildConfig.deleteMany({ where: { guildId } });
     }
   });
 }

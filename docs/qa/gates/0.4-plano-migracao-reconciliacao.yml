@@ -1,0 +1,56 @@
+schema: 1
+story: '0.4'
+story_title: 'Aprovar plano de migração e reconciliação'
+gate: PASS
+status_reason: 'Reavaliação documental após Architect 1.0.3: 8.8/10 (88/100), acima do threshold 8.5. Runbook draft versionado com matriz das 15 FKs, preconditions/stop/rollback e TDD-0.4-01a específico para ownerId transitional resolvem gaps da revisão 8.1. Recomendar @po como próximo agente serial. Story permanece Draft até validação AIOX. Nenhuma operação/teste foi executado; D004/SEC-011/014 continuam bloqueando operação real até evidências e aceite.'
+reviewer: 'Quinn (Test Architect) — prontidão documental após Architect 1.0.3; sem testes/backup/operação'
+reviewed_revision: 'Story 0.4 v1.0.3 e runbook draft 0.1.0, TDD-0.4-01a, ADR-002/003/004/007, Decisões Humanas 001/004/006/007/008 e QA Plan'
+updated: '2026-09-28T02:15:00Z'
+top_issues:
+  - id: 'STORY-004-RUNBOOK-DELIVERABLE-MISSING'
+    severity: high
+    status: resolved
+    finding: 'Finding anterior: runbook versionado exigido como entregável não existia.'
+    suggested_action: 'Resolvido em Architect 1.0.3: runbook draft versionado criado com matriz de 15 FKs, mapping, pré-condições, stop/rollback e campos para evidências futuras; não é executável/aprovado para operação.'
+    suggested_owner: devops
+  - id: 'STORY-004-OWNERID-TRANSITION-TDD'
+    severity: medium
+    status: resolved
+    finding: 'Finding anterior: TDD genérico não especificava conversão da FK transitional de Squad.ownerId.'
+    suggested_action: 'Resolvido em TDD-0.4-01a com caso ownerId Discord ID → profileId/FK composta, isolamento cross-guild e falha fechada preservando origem para órfão/duplicata/mismatch.'
+    suggested_owner: architect
+  - id: 'STORY-004-NO-OPS-EVIDENCE'
+    severity: low
+    status: accepted
+    finding: 'Nenhum backup, ensaio, VALIDATE ou cutover foi executado/verificado nesta revisão; D004 condiciona operações futuras a evidências e aceite.'
+    suggested_action: 'Manter operações bloqueadas até cumprir checklist D004 e evidenciar restauração testada, ensaio em cópia e aceite operacional nominal.'
+    suggested_owner: devops
+waiver:
+  active: false
+quality_score: 88
+evidence:
+  tests_reviewed: 0
+  risks_identified: 3
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    ac_gaps: []
+nfr_validation:
+  security:
+    status: CONCERNS
+    notes: 'Runbook draft registra D004 no-import, actorRef, auditoria pós-exclusão da guild e proibição de tratamento silencioso; não há evidência de operação real.'
+  performance:
+    status: PASS
+    notes: 'A sequência exige uma FK por vez, fora do pico e sob lock_timeout; sem operação ou medição executada.'
+  reliability:
+    status: CONCERNS
+    notes: 'Rollback, anti-join repetido na janela, fetch/grace e retenção estão planejados no runbook; results/placeholders operacionais continuam pendentes por design.'
+  maintainability:
+    status: CONCERNS
+    notes: 'Runbook versionado e matriz de 15 constraints rastreiam as emendas; ownerId tem assert TDD específico. Preencher evidência real apenas antes de execução autorizada.'
+recommendations:
+  immediate:
+    - action: 'Próximo agente serial @po: realizar validação AIOX final e manter Story Draft até registrar resultado do workflow.'
+      refs: ['docs/stories/0.4-plano-migracao-reconciliacao.story.md', 'docs/runbooks/subarushogun-migration-reconciliation.md']
+  future:
+    - action: 'Não executar migration/VALIDATE/cutover até backup restaurável, ensaio, fallback API+DB, checklist e aceite nominal D004 serem evidenciados.'
+      refs: ['docs/human_decisions/DONE/decisao-004-cutover-e-retencao-do-legado-v1.0.0.md', 'docs/stories/0.4-plano-migracao-reconciliacao.story.md']

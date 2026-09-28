@@ -21,6 +21,7 @@ Quando este documento contradiz `ARCHITECTURE_UNIVERSAL_BOT.md`, **este document
 | [ADR-004](#adr-004--política-de-atividade-e-expiração) | Atividade, expiração e restart | #7 / 1.3 + 1.6 | Decidido |
 | [ADR-005](#adr-005--registro-de-slash-commands-multi-guild) | Registro de comandos multi-guild | #9 Gap 1 | Decidido |
 | [ADR-006](#adr-006--credenciais-twitch-por-guild) | `clientSecret` Twitch por guild | #9 Gap 2, #2 / 1.7 | Decidido |
+| [ADR-007](#adr-007--retencao-expurgo-e-identidade-auditavel) | Retenção, expurgo, tenancy de identidade e auditoria | Story 0.1, 0.4; Decisão Humana 001 v1.1.0 | Decidido pelo Architect; requer validação QA antes de implementação |
 
 ---
 
@@ -69,12 +70,12 @@ Como `hashtextextended` mapeia tudo para o mesmo espaço, uma colisão entre dom
 
 | Invariante | Chave | Escopo da transação |
 | --- | --- | --- |
-| ≤ N squads ativas por jogo | `(squad_count, hash(guildId, gameId))` | contar squads em `provisioning`+`active`, inserir `Squad` + `SquadMember` do dono + linha de provisioning. Só SQL. |
+| ≤ N squads por jogo/guild | `(squad_count, hash(guildId, gameId))` | contar squads em `provisioning`+`active`+`pending_reconciliation`, inserir `Squad` + `SquadMember` do dono + linha de provisioning. Só SQL. |
 | ≤ M membros por squad | `(squad_membership, hash(guildId, squadId))` | ler squad, contar membros, inserir membro. Já está correto em `createMemberEntryIfNeeded` — só precisa de C2/C4. |
 | Um usuário não entra duas vezes | — | `UNIQUE (guildId, squadId, userId)` já existente. Invariante declarativo, não depende de lock. |
 | Um usuário não está em duas squads do mesmo jogo | mesmo lock de `squad_count` | a checagem `alreadyMember` já roda sob o lock correto. |
 
-**Squads em `provisioning` contam para o limite.** É a escolha conservadora: prefere-se recusar uma criação a estourar o limite. Uma linha travada em `provisioning` é liberada pelo reconciliador (ADR-002), não por expiração de lock.
+**Squads em `provisioning`, `active` e `pending_reconciliation` contam para o limite.** `pending_reconciliation` permanece reservando vaga até a reconciliação mover a squad para estado não contado. A inclusão de `pending_reconciliation` foi aprovada pelo proprietário na Decisão Humana 009 (Opção A, 2026-09-28), estendendo a lista original deste ADR. É a escolha conservadora: prefere-se recusar uma criação a exceder o limite enquanto há divergência externa. A vaga é liberada por uma transição persistida observada pela próxima contagem protegida pelo mesmo lock; lock não expira estado. O advisory lock de contagem protege somente a transação SQL T1 (ADR-002) e é liberado no commit antes de qualquer efeito Discord ou reconciliação externa.
 
 ### Nível de isolamento
 
@@ -115,7 +116,7 @@ provisioning ──> active ──> closing ──> closed
                     └──> orphan_pending  (compensação falhou; exige ação humana)
 ```
 
-**Mudança relevante:** `closed` substitui a exclusão física. Hoje `deleteSquadRecord` faz `squad.deleteMany`, o que destrói a trilha de auditoria e é a razão de existir o trigger `preserve_voice_session_history_before_squad_delete` e os `ON DELETE CASCADE` da migration `20260903_000003`. Com `closed` + retenção, o histórico de sessão, reputação e auditoria permanece íntegro por construção e os CASCADEs deixam de ser o mecanismo de preservação. A retenção antes do expurgo é `[PO]` (Story 0.1, política de privacidade).
+**Mudança relevante:** `closed` substitui a exclusão física. Hoje `deleteSquadRecord` faz `squad.deleteMany`, o que destrói histórico e depende do trigger `preserve_voice_session_history_before_squad_delete` e dos `ON DELETE CASCADE` da migration `20260903_000003`. A retenção aprovada e seus timestamps estão em ADR-007: manter o agregado da squad por 90 dias a partir de `closedAt`; a auditoria sobrevive ao expurgo por 365 dias a partir de `AuditLog.createdAt` e não pode depender de FK para o perfil ou a squad. Os CASCADEs não podem apagar trilha de auditoria.
 
 #### Criação em três fases
 
@@ -176,8 +177,8 @@ São 15 constraints `NOT VALID` entre `20260903_000002` e `20260903_000003`. `VA
 
 **Dois bloqueadores que precisam de decisão antes de validar, não durante:**
 
-- **`AuditLog_guildId_actorId_fkey` → `UserProfile`.** Validar essa FK acopla a trilha de auditoria ao ciclo de vida do perfil: a remoção de dados de um membro (política de privacidade, §12.1) passaria a exigir apagar ou reescrever registros de auditoria. Recomendação do Architect: **não validar essa constraint; substituí-la por `ON DELETE SET NULL` ou removê-la**, mantendo `actorId` como referência fraca e preservando um `actorDiscordId` desnormalizado no próprio registro de auditoria. Auditoria precisa sobreviver ao expurgo do sujeito. `[PO]` confirma a política de retenção.
-- **Inconsistência de chave de identidade.** Conforme o cabeçalho da própria migration `000003`, `SquadMember.userId`, `Squad.ownerId`, `ReputationParticipant.userId` e `ReputationVote.voterId/targetId` guardam **Discord IDs**, enquanto `UserProfile.id` é um ID interno — e `Squad_guildId_ownerId_fkey` referencia `UserProfile(guildId, discordId)` enquanto as demais referenciam `UserProfile(guildId, id)`. Há duas chaves de identidade convivendo. **Unificar antes de validar**, adotando `(guildId, discordId)` como chave natural escopada por guild (é a que o Discord entrega em toda interação e a que elimina uma indireção em todo caminho quente). Essa unificação é trabalho de schema da Story 0.1/0.4, executado por @data-engineer.
+- **`AuditLog_guildId_actorId_fkey` → `UserProfile`.** Não validar/manter a FK como vínculo obrigatório: isso acopla auditoria ao ciclo de vida do perfil. ADR-007 especifica `actorRef` aleatório, opaco e per-guild, com perfil atuando apenas como mapa enquanto existe; audit rows persistem sem FK ao perfil ou à squad. Identificadores diretos e PII em alvo/detalhes também precisam ser minimizados ou pseudonimizados.
+- **Inconsistência de chave de identidade.** Conforme a migration `000003`, `SquadMember.userId`, `Squad.ownerId`, `ReputationParticipant.userId` e `ReputationVote.voterId/targetId` guardam **Discord IDs**, enquanto outros FKs usam `UserProfile.id`. Contrato de destino: `(guildId, discordId)` é a chave natural usada na entrada para resolver o perfil local; uma vez resolvido, toda relação persistida para `UserProfile` usa o ID interno de perfil com FK composta `(guildId, profileId)` → `(UserProfile.guildId, id)`. Não misturar IDs Discord e IDs internos em colunas `userId/ownerId`; usar nomes distintos `...DiscordId` e `...ProfileId` no modelo. Story 0.1 define esse contrato; @data-engineer executa o mapeamento legado em story de schema/migração.
 
 ---
 
@@ -399,6 +400,32 @@ Isto **supersede** a recomendação de `ARCHITECTURE_UNIVERSAL_BOT.md` §4 ("sec
 
 ---
 
+## ADR-007 — Retenção, expurgo e identidade auditável
+
+**Contexto:** Story 0.1/0.4 e Decisão Humana 001 v1.1.0, aprovada pelo proprietário em 2026-09-27. Os intervalos de 90 dias para squads encerradas e 365 dias para auditoria são fixos nesta decisão humana; este ADR define os timestamps, elegibilidade e preservação, sem reabrir prazos.
+
+### Decisão do Architect
+
+1. **Squad:** acrescentar `closedAt` ao contrato de dados. Registrar o instante uma única vez na transição terminal para `closed`, pelo relógio do PostgreSQL em UTC, na mesma transação que persiste estado/motivo e audit event. `closing`, `provisioning`, `failed_provisioning`, `orphan_pending`, estado desconhecido e qualquer `closed` sem timestamp não são elegíveis. `closedAt` é imutável; não reabrir um agregado fechado para reiniciar relógio — operação posterior cria novo agregado. Purgar a row da squad e os dados relacionados abrangidos pela Decisão Humana 007 (incluindo `VoiceSession` histórica e `ScheduledSquad`/attendees associados) quando `closedAt <= asOf - 90×24h`; a seleção e vínculo de cada relação serão especificados/testados em story própria. `ProvisioningOperation` pertence à guild e à squad; operações não terminais e recursos órfãos não são apagados por idade.
+2. **Auditoria:** `AuditLog.createdAt` é a hora de persistência atribuída pelo PostgreSQL (UTC), não um timestamp fornecido pelo caller. Purgar log quando `createdAt <= asOf - 365×24h`. Capturar `asOf` uma vez por lote usando relógio do banco e passá-lo como parâmetro ao repositório, para fronteira determinística e testeável. A exclusão de squad, perfil ou guild não pode apagar audit rows antes do limite próprio de 365 dias.
+3. **Perfil e audit actor:** substituir vínculo obrigatório `AuditLog.actorId → UserProfile` por `actorRef` aleatório/opaque, gerado por perfil e guild (`UserProfile.auditActorRef`), sem FK partindo de auditoria. Enquanto perfil existe, `(guildId, auditActorRef)` permite atribuir eventos; na remoção do perfil, o mapeamento desaparece e os eventos mantêm somente a referência pseudonimizada. A geração é aleatória independente por guild, sem codificar nem derivar de `discordId`. Alvos que sejam pessoas usam referência pseudonimizada; `details` é allowlist de campos sem IDs Discord, nomes, conteúdo de mensagem, credentials ou outros identificadores desnecessários. Audit rows sempre permanecem tenant-scoped por `guildId`.
+4. **Chaves de perfil/FKs:** `(guildId, discordId)` é a chave natural da resolução de uma identidade Discord recebida. O perfil comunitário é sempre local à guild; não há perfil/atributo comunitário global. Depois da resolução, relações persistidas usam exclusivamente o ID interno do perfil e FK composta `(guildId, profileId)` para `(UserProfile.guildId, UserProfile.id)`. Campos têm nomes distintos para IDs externos e internos. Todo dado operacional, inclusive `SquadMember`, operações e estados de provisioning, é por guild.
+5. **Legado:** a migração deve inventariar a semântica de cada coluna antes de converter: proprietário/membro/voter/target em Discord ID resolve por `(guildId, discordId)`; colunas já referenciando `UserProfile.id` preservam o perfil correspondente. Uma linha sem correspondência única, duplicada ou ambígua interrompe a validação e impede remoção da origem/constraints antigas. Para squads legadas já `closed` sem data confiável, backfill de `closedAt` com o instante de migração em UTC (retém por mais tempo, nunca antecipa expurgo); estados órfãos/desconhecidos ficam sem elegibilidade e exigem reconciliação. Validar FKs após relatório de órfãos/duplicatas e paridade A/B. Este contrato descreve conversão/validação das linhas que participam dessas operações técnicas; não determina importar o dataset ativo no cutover.
+
+**Fronteira com a Decisão Humana 004:** D004 continua determinando reset completo do dataset ativo SubaruShogun no cutover, após ensaio em cópia, aceite operacional, fallback validado e checklist. Mapping de identidade em migration/reconciliação técnica não é importação desse dataset para a instalação multi-guild. O runbook identifica explicitamente os snapshots/linhas legadas usados para validação e prova que o dataset ativo do destino começa vazio.
+
+### Critérios de teste que @qa deve exigir antes da implementação
+
+- Data limite da squad e relações da Decisão 007: manter em `closedAt + 90d - 1ms`, elegível no limite `+90d`, incluindo `VoiceSession` histórica e `ScheduledSquad`/attendees associados; não selecionar estado não terminal, `closedAt=NULL` ou `orphan_pending`. Confirmação com horário fixo e lote repetido idempotente.
+- Backfill legado: aplicar instante de migração fixo a linhas `closed`; provar retenção até completar 90 dias após backfill. Colunas Discord ID e profile ID mapeiam para o mesmo perfil local previsto; órfão e duplicata impedem validação, sem perda dos dados-fonte.
+- Data limite de auditoria: manter em `createdAt + 365d - 1ms`, elegível no limite `+365d`, sem depender de `closedAt` ou ciclo de vida de perfil/squad.
+- Privacidade: apagar perfil antes de 365d não apaga nem reescreve o evento, não deixa ID Discord/nome em actor, target ou details; pseudônimo continua isolado entre guilds e audit query de A não retorna B.
+- Tenant/FKs: mesmo `discordId` em A e B resolve dois perfis; FK composta cruzada é rejeitada; proprietário, membros, reputação e operations não misturam Discord ID e profile ID.
+
+**Limite de escopo:** este ADR não muda schema/runtime nem executa expurgo. A mecânica é proposta como contrato na Story 0.1; itens que pedem validação PO ali permanecem não aprovados. Schema, migração/backfill e job exigem stories Ready próprias após QA validar o contrato, PO aceitá-lo e a estratégia ser reconciliada com a Decisão 004.
+
+---
+
 ## Decisões humanas e pendências do proprietário
 
-As decisões humanas são mantidas em [`docs/human_decisions/README.md`](human_decisions/README.md). As decisões 001–004 foram aprovadas: 001 aprova a política geral de sobrevivência da auditoria, mas deixa prazos numéricos de retenção pendentes; 002 aprova acesso opt-in da staff a texto e voz dentro da mesma guild; 003 aprova capabilities nomeadas por cargo/guild; 004 aprova cutover após ensaio completo em cópia e aceite, com reset total e fallback compactado por sete dias. A execução permanece condicionada às evidências e ao checklist operacional descritos na Decisão 004.
+As decisões humanas são mantidas em [`docs/human_decisions/README.md`](human_decisions/README.md). Decisão 001 v1.1.0 aprova squads encerradas por 90 dias e auditoria por 365 dias; ADR-007 define os timestamps e a relação sem FK para preservar a trilha após expurgo de perfil. Decisões 002–004 também foram aprovadas; a execução da Decisão 004 continua condicionada às evidências e ao checklist operacional de cutover.

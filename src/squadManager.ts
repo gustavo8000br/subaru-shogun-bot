@@ -271,6 +271,22 @@ export class SquadManager {
     });
   }
 
+  private async persistProvisionedChannel(
+    guildId: string,
+    squadId: string,
+    channel: "voiceChannelId" | "textChannelId",
+    channelId: string,
+  ) {
+    const data =
+      channel === "voiceChannelId"
+        ? { voiceChannelId: channelId }
+        : { textChannelId: channelId };
+    await this.prisma.squad.update({
+      where: { guildId_id: { guildId, id: squadId } },
+      data,
+    });
+  }
+
   private async createSquadForGame(
     memberId: string,
     guild: Guild,
@@ -279,8 +295,9 @@ export class SquadManager {
     maxRank?: string,
     channelNames?: { voiceName: string; textName: string },
   ) {
-    return this.prisma.$transaction(async (transaction) => {
-      await transaction.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${guild.id}:${gameName}`}, 0))`;
+    const { squad, maxMembersPerSquad, squadName } = await this.prisma.$transaction(async (transaction) => {
+      // Return a scalar: Prisma cannot deserialize pg_advisory_xact_lock's void.
+      await transaction.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${guild.id}:${gameName}`}, 0)) IS NULL`;
       const config = await this.getGuildConfig(guild.id, transaction);
       const game = await this.getOrCreateGame(guild, gameName, transaction);
       const alreadyMember = await transaction.squad.findFirst({
@@ -306,7 +323,6 @@ export class SquadManager {
         );
       }
 
-      const category = await this.ensureTemporaryCategory(guild);
       const squadName =
         channelNames?.voiceName ?? `${gameName} • Squad ${activeSquads + 1}`;
       const squad = await transaction.squad.create({
@@ -324,44 +340,56 @@ export class SquadManager {
       await transaction.squadMember.create({
         data: { guildId: guild.id, squadId: squad.id, userId: memberId },
       });
-      let voiceChannel: VoiceChannel | undefined;
-      let textChannel: TextChannel | undefined;
-      try {
-        voiceChannel = await this.createVoiceChannel(
-          guild,
-          category.id,
-          squadName,
-          memberId,
-          config.maxMembersPerSquad,
-        );
-        textChannel = await this.createTextChannel(
-          guild,
-          category.id,
-          channelNames?.textName ?? `squad-${squadName}`,
-        );
-        await transaction.squad.update({
-          where: { guildId_id: { guildId: guild.id, id: squad.id } },
-          data: {
-            voiceChannelId: voiceChannel.id,
-            textChannelId: textChannel.id,
-            status: "active",
-          },
-        });
-        await textChannel.send({
-          content: `🛡️ Squad criada para ${gameName}. Voz: <#${voiceChannel.id}>. Chat: <#${textChannel.id}>. <@${memberId}> começou a sessão.`,
-          allowedMentions: { parse: [] },
-        });
-        return { squad, voiceChannel, textChannel };
-      } catch (error) {
-        await voiceChannel
-          ?.delete("Falha ao criar squad")
-          .catch(() => undefined);
-        await textChannel
-          ?.delete("Falha ao criar squad")
-          .catch(() => undefined);
-        throw error;
-      }
+      return { squad, maxMembersPerSquad: config.maxMembersPerSquad, squadName };
     });
+
+    // P2: Discord effects run after T1 commits. Persist every created resource
+    // before issuing the next external effect so partial progress is recoverable.
+    try {
+      const category = await this.ensureTemporaryCategory(guild);
+      const voiceChannel = await this.createVoiceChannel(
+        guild,
+        category.id,
+        squadName,
+        memberId,
+        maxMembersPerSquad,
+      );
+      await this.persistProvisionedChannel(
+        guild.id,
+        squad.id,
+        "voiceChannelId",
+        voiceChannel.id,
+      );
+
+      const textChannel = await this.createTextChannel(
+        guild,
+        category.id,
+        channelNames?.textName ?? `squad-${squadName}`,
+      );
+      await this.persistProvisionedChannel(
+        guild.id,
+        squad.id,
+        "textChannelId",
+        textChannel.id,
+      );
+
+      await textChannel.send({
+        content: `🛡️ Squad criada para ${gameName}. Voz: <#${voiceChannel.id}>. Chat: <#${textChannel.id}>. <@${memberId}> começou a sessão.`,
+        allowedMentions: { parse: [] },
+      });
+
+      // T3: finalize only after all P2 effects and their IDs are durable.
+      const completedSquad = await this.prisma.squad.update({
+        where: { guildId_id: { guildId: guild.id, id: squad.id } },
+        data: { status: "active" },
+      });
+      return { squad: completedSquad, voiceChannel, textChannel };
+    } catch (error) {
+      await this.markSquadPendingReconciliation(guild.id, squad.id, {
+        reason: "provisioning_effect_failed",
+      });
+      throw error;
+    }
   }
 
   public async createManualSquad(
@@ -463,6 +491,44 @@ export class SquadManager {
     }
   }
 
+  private async recordUnverifiedOrphanChannel(
+    guildId: string,
+    channelId: string,
+    channelName: string,
+  ) {
+    await this.prisma.auditLog
+      .create({
+        data: {
+          guildId,
+          eventType: "orphan_controlled_channel_unverified",
+          targetId: channelId,
+          details: { channelName, reason: "ownership_not_proven" },
+        },
+      })
+      .catch(() => undefined);
+  }
+
+  private async markSquadPendingReconciliation(
+    guildId: string,
+    squadId: string,
+    details: Prisma.InputJsonObject,
+  ) {
+    await this.prisma.squad.updateMany({
+      where: { guildId, id: squadId },
+      data: { status: "pending_reconciliation" },
+    });
+    await this.prisma.auditLog
+      .create({
+        data: {
+          guildId,
+          eventType: "squad_pending_reconciliation",
+          targetId: squadId,
+          details,
+        },
+      })
+      .catch(() => undefined);
+  }
+
   private scheduleEmptySquadCleanup(
     guild: Guild,
     squadId: string,
@@ -547,20 +613,11 @@ export class SquadManager {
       const guild = this.client.guilds.cache.get(squad.guildId);
 
       if (!guild) {
-        await this.prisma.squad.updateMany({
-          where: { id: squad.id, guildId: squad.guildId },
-          data: { status: "pending_reconciliation" },
-        });
-        await this.prisma.auditLog
-          .create({
-            data: {
-              guildId: squad.guildId,
-              eventType: "squad_pending_reconciliation",
-              targetId: squad.id,
-              details: { reason: "guild_not_in_cache" },
-            },
-          })
-          .catch(() => undefined);
+        await this.markSquadPendingReconciliation(
+          squad.guildId,
+          squad.id,
+          { reason: "guild_not_in_cache" },
+        );
         continue;
       }
 
@@ -572,40 +629,15 @@ export class SquadManager {
         : null;
 
       if (!voiceChannel || !textChannel) {
-        if (!voiceChannel && !textChannel) {
-          await this.prisma.auditLog
-            .create({
-              data: {
-                guildId: squad.guildId,
-                eventType: "squad_reconciled_missing_channels",
-                targetId: squad.id,
-                details: {
-                  voiceChannelId: squad.voiceChannelId,
-                  textChannelId: squad.textChannelId,
-                },
-              },
-            })
-            .catch(() => undefined);
-          await this.deleteSquadRecord(guild, squad.id);
-          continue;
-        }
-        await this.prisma.squad.updateMany({
-          where: { id: squad.id, guildId: squad.guildId },
-          data: { status: "pending_reconciliation" },
-        });
-        await this.prisma.auditLog
-          .create({
-            data: {
-              guildId: squad.guildId,
-              eventType: "squad_pending_reconciliation",
-              targetId: squad.id,
-              details: {
-                voiceChannelId: squad.voiceChannelId,
-                textChannelId: squad.textChannelId,
-              },
-            },
-          })
-          .catch(() => undefined);
+        await this.markSquadPendingReconciliation(
+          squad.guildId,
+          squad.id,
+          {
+            reason: "channel_missing_from_cache",
+            voiceChannelId: squad.voiceChannelId,
+            textChannelId: squad.textChannelId,
+          },
+        );
         continue;
       }
 
@@ -647,23 +679,15 @@ export class SquadManager {
           ),
       );
       for (const channel of controlledChannels.values()) {
-        if (
-          knownChannelIds.has(channel.id) ||
-          !("delete" in channel) ||
-          ("deletable" in channel && !channel.deletable)
-        )
-          continue;
-        await channel.delete("Canal controlado órfão").catch(() => undefined);
-        await this.prisma.auditLog
-          .create({
-            data: {
-              guildId: guild.id,
-              eventType: "orphan_controlled_channel_deleted",
-              targetId: channel.id,
-              details: { channelName: channel.name },
-            },
-          })
-          .catch(() => undefined);
+        if (knownChannelIds.has(channel.id)) continue;
+
+        // Names and cache placement are not ownership proof. Keep the resource
+        // intact until a persisted operation and an API fetch can establish it.
+        await this.recordUnverifiedOrphanChannel(
+          guild.id,
+          channel.id,
+          channel.name,
+        );
       }
     }
   }

@@ -1,0 +1,68 @@
+schema: 1
+story: '0.1'
+story_title: 'Definir o escopo dos dados por guild'
+gate: CONCERNS
+status_reason: 'Story 0.1 v1.0.3 está Ready após aceite PO (GO, 9/10). Score QA consultivo preservado em 8.8/10 (88/100); AC1 já não é gap. Gate permanece CONCERNS somente como registro de ausência de evidência de testes executados para estes contratos, que são futuros e pertencem a stories de implementação; esta Story é documental e não exigia testes executados.'
+reviewer: 'Quinn (Test Architect) — sincronização consultiva pós-PO; story documental Ready'
+reviewed_revision: 'worktree:Story 0.1 v1.0.3, decisão PO GO 9/10, ADR-002/006/007, QA Plan, Project Direction §12.1 e Decisões Humanas 001/004/006/007'
+updated: '2026-09-28T01:20:00Z'
+top_issues:
+  - id: 'STORY-001-READY'
+    severity: medium
+    status: resolved
+    finding: 'Finding anterior: matriz sem aceite explícito do PO e Story Draft.'
+    suggested_action: 'Resolvido pela decisão PO GO 9/10 e lifecycle Draft → Ready registrado na versão 1.0.3.'
+    suggested_owner: po
+  - id: 'STORY-001-PROJECT-DIRECTION-SECRET-SCOPE'
+    severity: medium
+    status: resolved
+    finding: 'Finding anterior: formulação ampla de segredo em runtime conflitando com ADR-006.'
+    suggested_action: 'Resolvido em Story/Project Direction/QA Plan v1.0.2, que distinguem clientSecret cifrado por guild da chave mestra runtime-only.'
+    suggested_owner: architect
+  - id: 'STORY-001-CUTOVER-LEGACY-MAPPING'
+    severity: high
+    status: resolved
+    finding: 'Finding anterior: relação entre reset D004 e mapping técnico legado não delimitada.'
+    suggested_action: 'Resolvido em v1.0.2: reset dataset ativo permanece conforme D004; mapping aplica somente às linhas legadas incluídas em migration/validação/reconciliação.'
+    suggested_owner: architect
+  - id: 'STORY-001-ACTORREF-PO-ACK'
+    severity: low
+    status: resolved
+    finding: 'Finding anterior: actorRef aparecia como confirmação pendente do PO apesar de D001/ADR-007.'
+    suggested_action: 'Removido da lista de decisões pendentes em v1.0.2; política aprovada permanece conforme D001/ADR-007.'
+    suggested_owner: architect
+  - id: 'STORY-001-TDD-FUTURE-EVIDENCE'
+    severity: medium
+    status: accepted
+    finding: 'Nenhum teste foi criado/executado para estes contratos; os testes são futuros e escopados às stories Ready de schema, migração e retenção.'
+    suggested_action: 'Manter esta ausência como limite de evidência documental; exigir TDD RED/GREEN nas stories de implementação antes de declarar comportamento comprovado.'
+    suggested_owner: qa
+waiver:
+  active: false
+quality_score: 88
+evidence:
+  tests_reviewed: 0
+  risks_identified: 2
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7]
+    ac_gaps: []
+nfr_validation:
+  security:
+    status: CONCERNS
+    notes: 'Isolamento, pseudonimização e proteção contra PII estão contratualmente especificados; os testes correspondentes são futuros e não foram executados. Revisar na implementação.'
+  performance:
+    status: PASS
+    notes: 'Nenhuma implementação a avaliar; ADR captura as fronteiras temporais determinísticas e execução por lote.'
+  reliability:
+    status: CONCERNS
+    notes: 'Retenção, migração fail-closed, atomicidade e preservação têm cenários TDD determinísticos nomeados; não há implementação nem evidência de execução.'
+  maintainability:
+    status: CONCERNS
+    notes: 'Schema/migração/backfill/job estão delimitados a stories futuras; aceite explícito da matriz/readiness permanece com PO. Cenários TDD planejados, não executados.'
+recommendations:
+  immediate:
+    - action: 'Nas stories futuras Ready, escrever TDD RED para FKs compostas, migração fail-closed, retenção, atomicidade, preservação de audit e privacy deletion antes da implementação.'
+      refs: ['docs/QA_PLAN_UNIVERSAL_BOT.md', 'docs/ARCHITECTURE_DECISIONS.md#adr-007--retencao-expurgo-e-identidade-auditavel']
+  future:
+    - action: 'Após Ready, implementar TDD com PostgreSQL real e relógio asOf controlado; validar fronteiras 90/365 dias, órfãos, duplicatas, cascades e isolamento por guild.'
+      refs: ['tests/postgres-integrity.test.ts']

@@ -64,3 +64,13 @@ Interprete os atalhos abaixo carregando o arquivo correspondente em `.aiox-core/
 - `@squad-creator`, `/squad-creator`, `/squad-creator.md` -> `.aiox-core/development/agents/squad-creator.md`
 - `@aiox-master`, `/aiox-master`, `/aiox-master.md` -> `.aiox-core/development/agents/aiox-master.md`
 <!-- AIOX-MANAGED-END: shortcuts -->
+
+## Lei do projeto: ciclo TDD obrigatório
+
+Para toda implementação ou correção de código de produção, siga explicitamente e nesta ordem o ciclo **Red → Green → Refactor**:
+
+1. **Red:** escreva primeiro um teste direcionado para o comportamento ainda ausente/incorreto e execute-o. Confirme que falha pela razão funcional esperada, não por setup, fixture ou harness quebrado.
+2. **Green:** faça a menor alteração de produção necessária para o teste passar e execute novamente o teste direcionado.
+3. **Refactor:** com os testes verdes, limpe a solução sem mudar o comportamento e rode novamente os testes relevantes; registre o resultado.
+
+Não edite código de produção antes de obter Red válido. Se o ciclo não puder avançar por bloqueio de ambiente ou dependência, registre a evidência e o motivo na story, não declare a etapa concluída e não alegue conformidade TDD. Repita o ciclo em incrementos pequenos para cada comportamento. Testes anteriores a esta regra são históricos: não os rotule retroativamente como TDD.
