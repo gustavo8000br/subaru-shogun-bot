@@ -1,0 +1,26 @@
+schema: 1
+story: '0.5'
+gate: WAIVED
+status_reason: 'The owner formally accepted SEC-009 temporarily through 2026-10-27 with a named responsible party and re-evaluation date; the finding remains HIGH, open, and uncorrected. GitHub Actions is configured by Story 0.6, but no hosted run is claimed here. Secret scanning remains BLOCKED/NOT CONFIGURED and is not treated as PASS or release clearance.'
+reviewer: 'Quinn'
+reviewed_revision: 'story-content-sha256:d36cf931d15aa56aa8934374b68917be5b807a5fee4b930c21d96f042486e05b'
+updated: '2026-09-27T22:00:00Z'
+top_issues:
+  - id: 'SEC-009'
+    severity: high
+    status: open
+    finding: '`npm audit --omit=dev --audit-level=high` and `npm audit --audit-level=high` both exit 1 for three HIGH advisories through deepmerge-ts <8.0.0 via @prisma/config/Prisma. The owner accepted temporary risk through 2026-10-27; the advisory remains uncorrected and runtime exposure remains unconfirmed.'
+    suggested_action: 'Keep the temporary operational control in place, re-evaluate by 2026-10-27 or when a supported Prisma release is available, and remediate through a separately validated story. Do not report this finding as resolved.'
+  - id: 'TEST-002'
+    severity: medium
+    status: blocked
+    finding: 'Secret scanning is unavailable (gitleaks is not installed). GitHub Actions is configured by Story 0.6, but a hosted run remains pending and is not inferred from local checks.'
+    suggested_action: 'Keep secret scanning BLOCKED until its separately approved scope is met; obtain and record a hosted GitHub Actions run before completing Story 0.6.'
+waiver:
+  active: true
+  reason: 'Temporary owner-approved acceptance of SEC-009 only. Scope: three HIGH npm audit findings for deepmerge-ts <8.0.0 via Prisma tooling; runtime exposure is not confirmed. Operational mitigation: restrict Prisma CLI/configuration execution to trusted inputs; implementation of this control has not been verified.'
+  approved_by: 'Gustavo Mathias Rocha (project owner)'
+  approved_on: '2026-09-27'
+  responsible: 'Project owner'
+  review_by: '2026-10-27'
+  source: 'docs/human_decisions/DONE/decisao-005-aceite-de-risco-sec-009-prisma-deepmerge-ts-v1.0.0.md'

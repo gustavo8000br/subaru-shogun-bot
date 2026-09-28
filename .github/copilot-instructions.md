@@ -41,6 +41,10 @@ When an agent mode is active:
 - Add tests for new features
 - Test edge cases and error scenarios
 
+### Project CI Policy
+- GitHub Actions in `.github/workflows/ci.yml` is the project's CI source of truth.
+- Do not configure or invoke external automated review services; use the workflow checks and AIOX @qa/@architect reviews.
+
 ## AIOX Framework Structure
 
 ```

@@ -1,6 +1,6 @@
 {
   "name": "subaru-shogun-bot",
-  "version": "2.2.1",
+  "version": "2.3.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,7 +15,9 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev --name init",
     "db:migrate:deploy": "prisma migrate deploy",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "test:integration": "bash scripts/test-integration.sh",
+    "quality:pipeline": "bash scripts/quality-pipeline.sh"
   },
   "dependencies": {
     "@prisma/client": "^6.10.1",

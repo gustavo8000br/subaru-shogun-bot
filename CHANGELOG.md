@@ -2,6 +2,19 @@
 
 Todas as mudanças relevantes do ShogunBot são documentadas neste arquivo.
 
+## [2.3.0] - 2026-09-11
+
+### Adicionado
+
+- Isolamento multi-guild em `UserProfile`, `VoiceSession` e inventário/loja, com chaves compostas por `guildId`.
+- Ledger de compras (`purchaseLedger`) e débito condicional de saldo para eliminar corridas de compra e saldo negativo (SEC-005).
+- Lock consultivo de transação (`pg_advisory_xact_lock`) para impedir sessões de voz duplicadas por usuário/guild.
+
+### Corrigido
+
+- `allowedMentions: { parse: [] }` aplicado nos pontos de envio restantes (bot, squads, painel, relay Twitch) para bloquear menções não intencionais (SEC-006/013).
+- Recompensa de voz agora calcula minutos decorridos por sessão e evita reaplicar créditos já concedidos.
+
 ## [2.2.1] - 2026-08-27
 
 ### Modificado
